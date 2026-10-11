@@ -19,7 +19,8 @@
     "better-sqlite3": "^12.11.1",
     "drizzle-orm": "^0.45.4",
     "sharp": "^0.34.5",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "zod-to-json-schema": "3.25"
   },
   "devDependencies": {
     "@sveltejs/adapter-node": "^5.5.7",

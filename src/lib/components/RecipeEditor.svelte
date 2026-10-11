@@ -26,9 +26,11 @@
 		/** Present when editing an existing recipe. */
 		recipeId?: string;
 		photoPath?: string | null;
+		/** Photo used for an import; becomes the recipe photo unless the user clears it. */
+		initialPhoto?: File | null;
 	}
 
-	let { draft, tags, allTags, recipeId, photoPath = null }: Props = $props();
+	let { draft, tags, allTags, recipeId, photoPath = null, initialPhoto = null }: Props = $props();
 
 	// The form owns its state from here on; props only seed it.
 	const seed = untrack(() => $state.snapshot(draft));
@@ -43,7 +45,7 @@
 	);
 	let stepRows = $state<StepEditorRow[]>(seed.steps.length ? stepsToRows(seed.steps) : [newStepRow()]);
 	let changeNote = $state('');
-	let photoFile = $state<File | null>(null);
+	let photoFile = $state<File | null>(untrack(() => initialPhoto));
 	let removePhoto = $state(false);
 
 	let errors = $state<string[]>([]);
@@ -89,7 +91,8 @@
 		return n;
 	}
 
-	async function save() {
+	/** Reads the form into a validated draft, or reports what is wrong. */
+	function collectDraft(): { draft: RecipeDraft | null; errors: string[] } {
 		const errs: string[] = [];
 		const { ingredients, errors: ingErrors } = rowsToIngredients($state.snapshot(ingRows));
 		rowErrors = Object.fromEntries(ingErrors.map((e) => [e.key, e.message]));
@@ -110,12 +113,36 @@
 				errs.push(issue.path[0] === 'title' ? 'Title is required.' : `${issue.path.join('.')}: ${issue.message}`);
 			}
 		}
+		return { draft: errs.length || !parsed.success ? null : parsed.data, errors: errs };
+	}
+
+	/** Current form content, for the assistant to refine. */
+	export function getDraft(): { draft: RecipeDraft | null; errors: string[] } {
+		return collectDraft();
+	}
+
+	/** Replaces the recipe content with a draft from the assistant (tags and photo stay). */
+	export function setDraft(d: RecipeDraft, note?: string) {
+		title = d.title;
+		servings = d.servings === null ? '' : String(d.servings);
+		yieldG = d.yield_g === null ? '' : String(d.yield_g);
+		notes = d.notes ?? '';
+		sourceUrl = d.source_url ?? '';
+		ingRows = d.ingredients.length ? ingredientsToRows(d.ingredients) : [newIngredientRow()];
+		stepRows = d.steps.length ? stepsToRows(d.steps) : [newStepRow()];
+		rowErrors = {};
+		errors = [];
+		if (note !== undefined) changeNote = note;
+	}
+
+	async function save() {
+		const { draft: valid, errors: errs } = collectDraft();
 		errors = errs;
-		if (errs.length || !parsed.success) return;
+		if (!valid) return;
 
 		saving = true;
 		try {
-			const body = JSON.stringify({ draft: parsed.data, tags: currentTags, change_note: changeNote.trim() || undefined });
+			const body = JSON.stringify({ draft: valid, tags: currentTags, change_note: changeNote.trim() || undefined });
 			const res = await fetch(recipeId ? `/api/recipes/${recipeId}` : '/api/recipes', {
 				method: recipeId ? 'PUT' : 'POST',
 				headers: { 'content-type': 'application/json' },
@@ -255,6 +282,12 @@
 			<div class="row current-photo">
 				<img src={photoUrl(photoPath, 'thumb')} alt="" width="64" height="64" />
 				<button type="button" class="btn small" onclick={() => (removePhoto = true)}>Remove</button>
+			</div>
+		{/if}
+		{#if photoFile && photoFile === initialPhoto}
+			<div class="row current-photo">
+				<span class="muted">Using the photo from the chat.</span>
+				<button type="button" class="btn small" onclick={() => (photoFile = null)}>Don't use</button>
 			</div>
 		{/if}
 		<input

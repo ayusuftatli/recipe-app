@@ -45,3 +45,13 @@ export async function deletePhoto(name: string | null): Promise<void> {
 	const dir = photoDir();
 	await Promise.all([`${name}.webp`, `${name}.thumb.webp`].map((f) => unlink(join(dir, f)).catch(() => {})));
 }
+
+/** Downscaled JPEG data: URL for sending a photo to a vision model. */
+export async function photoToDataUrl(input: Buffer): Promise<string> {
+	const jpeg = await sharp(input, { failOn: 'error' })
+		.rotate()
+		.resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
+		.jpeg({ quality: 85 })
+		.toBuffer();
+	return `data:image/jpeg;base64,${jpeg.toString('base64')}`;
+}

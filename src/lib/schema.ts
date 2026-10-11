@@ -61,3 +61,13 @@ export const PatchRecipeRequest = z.object({
 	tags: Tags.optional(),
 	archived: z.boolean().optional()
 });
+
+/**
+ * What the assistant returns for each chat message: a short reply for the chat
+ * and the full recipe draft (null when the message contained no recipe).
+ */
+export const AssistantReply = z.object({
+	reply: z.string(),
+	draft: RecipeDraft.nullable()
+});
+export type AssistantReply = z.infer<typeof AssistantReply>;

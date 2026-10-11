@@ -9,7 +9,7 @@
 	<header>
 		<a class="brand" href="/">Recipe Box</a>
 		<nav>
-			<a href="/recipes/new" class="btn small primary">+ New</a>
+			<a href="/recipes/new" class="btn small primary">+ Add recipe</a>
 			<a href="/settings" class="icon-btn" aria-label="Settings" title="Settings">⚙</a>
 		</nav>
 	</header>

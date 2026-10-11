@@ -81,3 +81,8 @@ export function normalizeDraft(d: RecipeDraft): RecipeDraft {
 export function sameContent(a: RecipeDraft, b: RecipeDraft): boolean {
 	return JSON.stringify(normalizeDraft(a)) === JSON.stringify(normalizeDraft(b));
 }
+
+/** Response of POST /api/assistant. */
+export type AssistantResponse =
+	| { ok: true; reply: string; draft: RecipeDraft | null; summary: string | null }
+	| { ok: false; error: string; raw?: string };
