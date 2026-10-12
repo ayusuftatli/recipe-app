@@ -11,9 +11,9 @@ export const load: PageServerLoad = ({ locals }) => {
 
 const LoginForm = z.object({ password: z.string().min(1).max(500) });
 
-/** Only allow same-site relative redirects after login. */
+/** Only allow same-site relative redirects after login. Browsers read a backslash as "/", so "/\host" is refused too. */
 function safeNext(next: string | null): string {
-	return next && next.startsWith('/') && !next.startsWith('//') ? next : '/';
+	return next && /^\/(?![/\\])[^\\]*$/.test(next) ? next : '/';
 }
 
 export const actions: Actions = {

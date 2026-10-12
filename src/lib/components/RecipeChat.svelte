@@ -143,6 +143,7 @@
 					bind:this={fileInput}
 					type="file"
 					accept="image/*"
+					capture="environment"
 					hidden
 					onchange={(e) => (photo = e.currentTarget.files?.[0] ?? null)}
 				/>
