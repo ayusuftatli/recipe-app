@@ -1,10 +1,22 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { invalidateAll } from '$app/navigation';
 	import RecipeView from '$lib/components/RecipeView.svelte';
 	import { photoUrl } from '$lib/format';
+	import type { RecipeDraft } from '$lib/schema';
 
 	let { data } = $props();
 	const recipe = $derived(data.recipe);
+
+	async function saveScaled(draft: RecipeDraft, changeNote: string) {
+		const res = await fetch(`/api/recipes/${recipe.id}`, {
+			method: 'PUT',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ draft, tags: recipe.tags, change_note: changeNote })
+		});
+		if (!res.ok) throw new Error(`Save failed (${res.status})`);
+		await invalidateAll();
+	}
 </script>
 
 <svelte:head><title>{recipe.current.title} · Recipe Box</title></svelte:head>
@@ -25,7 +37,9 @@
 	{/each}
 </div>
 
-<RecipeView version={recipe.current} />
+{#key recipe.current.id}
+	<RecipeView version={recipe.current} scalable onSaveScaled={saveScaled} />
+{/key}
 
 <form method="POST" action={recipe.archived ? '?/unarchive' : '?/archive'} use:enhance class="archive-form">
 	<button class="btn small" type="submit">{recipe.archived ? 'Unarchive' : 'Archive'}</button>

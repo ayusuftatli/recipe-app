@@ -1,19 +1,94 @@
 <script lang="ts">
+	import { parseNumber } from '$lib/editor';
 	import { formatGrams, formatQty, groupRuns } from '$lib/format';
-	import type { RecipeVersion } from '$lib/types';
+	import {
+		percentages,
+		roundGrams,
+		scaleDraft,
+		scaleFactor,
+		scaleIngredients,
+		type ScaleMode,
+		type ScaleRequest
+	} from '$lib/scaling';
+	import type { RecipeDraft } from '$lib/schema';
+	import { versionToDraft, type RecipeVersion } from '$lib/types';
+	import ScaleControls from './ScaleControls.svelte';
 
-	let { version }: { version: RecipeVersion } = $props();
+	let {
+		version,
+		scalable = false,
+		onSaveScaled
+	}: {
+		version: RecipeVersion;
+		/** Shows the scaling controls. Scaling only changes what is displayed. */
+		scalable?: boolean;
+		/** Enables "Save as new version" for a scaled recipe; should throw on failure. */
+		onSaveScaled?: (draft: RecipeDraft, changeNote: string) => Promise<void>;
+	} = $props();
 
-	const ingredientRuns = $derived(groupRuns(version.ingredients));
+	let mode = $state<ScaleMode>('off');
+	let target = $state('');
+	let anchorId = $state('');
+	let saving = $state(false);
+	let saveError = $state('');
+
+	const request = $derived.by((): ScaleRequest | null => {
+		const amount = parseNumber(target);
+		if (!amount) return null;
+		if (mode === 'servings' || mode === 'weight') return { mode, target: amount };
+		if (mode === 'anchor') return { mode, ingredientId: anchorId, available: amount };
+		return null;
+	});
+	const factor = $derived(request ? scaleFactor(version, request) : null);
+	const scaled = $derived(factor !== null && factor !== 1);
+	const ingredients = $derived(scaleIngredients(version.ingredients, factor ?? 1));
+	const percents = $derived(mode === 'percent' ? percentages(version.ingredients) : null);
+	const servings = $derived(version.servings === null ? null : version.servings * (factor ?? 1));
+	const yieldG = $derived(version.yield_g === null ? null : roundGrams(version.yield_g * (factor ?? 1)));
+
+	function changeNote(req: ScaleRequest): string {
+		if (req.mode === 'servings') return `Scaled to ${formatQty(req.target)} servings`;
+		if (req.mode === 'weight') return `Scaled to ${formatGrams(req.target)} total`;
+		const name = version.ingredients.find((i) => i.id === req.ingredientId)?.name ?? '';
+		return `Scaled to ${formatGrams(req.available)} ${name}`.trim();
+	}
+
+	async function saveScaled() {
+		if (!onSaveScaled || !request || factor === null) return;
+		saving = true;
+		saveError = '';
+		try {
+			await onSaveScaled(scaleDraft(versionToDraft(version), factor), changeNote(request));
+		} catch (e) {
+			saveError = e instanceof Error ? e.message : 'Save failed';
+		} finally {
+			saving = false;
+		}
+	}
+
+	const ingredientRuns = $derived(groupRuns(ingredients));
 	const stepRuns = $derived(groupRuns(version.steps));
 </script>
 
-{#if version.servings !== null || version.yield_g !== null}
+{#if servings !== null || yieldG !== null}
 	<p class="muted facts">
-		{#if version.servings !== null}{formatQty(version.servings)} servings{/if}
-		{#if version.servings !== null && version.yield_g !== null} · {/if}
-		{#if version.yield_g !== null}{formatGrams(version.yield_g)} final weight{/if}
+		{#if servings !== null}{formatQty(servings)} servings{/if}
+		{#if servings !== null && yieldG !== null} · {/if}
+		{#if yieldG !== null}{formatGrams(yieldG)} final weight{/if}
 	</p>
+{/if}
+
+{#if scalable && version.ingredients.length > 0}
+	<ScaleControls
+		{version}
+		bind:mode
+		bind:target
+		bind:anchorId
+		{factor}
+		onSave={onSaveScaled ? saveScaled : undefined}
+		{saving}
+		error={saveError}
+	/>
 {/if}
 
 <h2>Ingredients</h2>
@@ -25,10 +100,18 @@
 	<ul class="ingredients">
 		{#each run.items as ing (ing.id)}
 			<li>
-				<span class="amount">{formatQty(ing.qty)} {ing.unit ?? ''}</span>
+				{#if percents}
+					{@const percent = percents.get(ing.id)}
+					<span class="amount">{percent == null ? '–' : `${percent} %`}</span>
+				{:else}
+					<span class="amount">{formatQty(ing.qty)} {ing.unit ?? ''}</span>
+				{/if}
 				<span class="name">
 					{ing.name}{#if ing.note}<span class="muted">, {ing.note}</span>{/if}
 					{#if ing.optional}<span class="badge">optional</span>{/if}
+					{#if ing.qty_only && (scaled || percents)}
+						<span class="badge warn">{percents ? 'no weight' : 'no weight, scaled by quantity'}</span>
+					{/if}
 				</span>
 				<span class="grams muted">
 					{#if ing.grams !== null}{ing.grams_estimated ? '≈' : ''}{formatGrams(ing.grams)}{/if}
@@ -77,6 +160,10 @@
 		gap: 8px;
 		padding: 6px 0;
 		border-bottom: 1px solid var(--border);
+	}
+	.badge.warn {
+		background: var(--warn-bg);
+		border: 1px solid var(--warn-border);
 	}
 	.amount {
 		font-weight: 600;
