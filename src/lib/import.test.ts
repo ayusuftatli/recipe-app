@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { asUrl, describeDraft, extractJsonLdRecipe, finalizeDraft, htmlToText, parseModelJson } from './import';
+import { asUrl, describeDraft, extractImageUrl, extractJsonLdRecipe, finalizeDraft, htmlToText, parseModelJson } from './import';
 import type { RecipeDraft } from './schema';
 
 const UUID = /^[0-9a-f-]{36}$/;
@@ -105,6 +105,30 @@ describe('extractJsonLdRecipe', () => {
 	it('returns null when there is no Recipe or the JSON is broken', () => {
 		expect(extractJsonLdRecipe('<script type="application/ld+json">{broken</script>')).toBeNull();
 		expect(extractJsonLdRecipe('<p>hi</p>')).toBeNull();
+	});
+});
+
+describe('extractImageUrl', () => {
+	const page = 'https://example.com/recipes/soup';
+	const ld = (image: unknown) => `<script type="application/ld+json">${JSON.stringify({ '@type': 'Recipe', name: 'x', image })}</script>`;
+
+	it('takes the first JSON-LD image, whatever its shape', () => {
+		expect(extractImageUrl(ld('https://cdn.example.com/a.jpg'), page)).toBe('https://cdn.example.com/a.jpg');
+		expect(extractImageUrl(ld(['/img/a.jpg', '/img/b.jpg']), page)).toBe('https://example.com/img/a.jpg');
+		expect(extractImageUrl(ld({ '@type': 'ImageObject', url: 'a.jpg' }), page)).toBe('https://example.com/recipes/a.jpg');
+		expect(extractImageUrl(ld([{ '@type': 'ImageObject', url: '//cdn.example.com/a.jpg' }]), page)).toBe('https://cdn.example.com/a.jpg');
+	});
+	it('prefers JSON-LD over og:image and falls back to meta tags', () => {
+		const og = '<meta property="og:image" content="https://example.com/og.jpg?a=1&amp;b=2">';
+		expect(extractImageUrl(og + ld('https://example.com/ld.jpg'), page)).toBe('https://example.com/ld.jpg');
+		expect(extractImageUrl(og, page)).toBe('https://example.com/og.jpg?a=1&b=2');
+		expect(extractImageUrl("<meta content='/tw.png' name='twitter:image' />", page)).toBe('https://example.com/tw.png');
+	});
+	it('returns null when there is no usable image', () => {
+		expect(extractImageUrl('<p>hi</p>', page)).toBeNull();
+		expect(extractImageUrl(ld({ caption: 'no url' }), page)).toBeNull();
+		expect(extractImageUrl(ld('data:image/png;base64,AAAA'), page)).toBeNull();
+		expect(extractImageUrl('<meta property="og:image:width" content="800">', page)).toBeNull();
 	});
 });
 

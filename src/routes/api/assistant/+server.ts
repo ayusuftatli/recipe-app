@@ -2,7 +2,7 @@ import { error, json } from '@sveltejs/kit';
 import { z } from 'zod';
 import { asUrl, describeDraft, finalizeDraft } from '$lib/import';
 import { RecipeDraft } from '$lib/schema';
-import { FetchPageError, fetchRecipeSource } from '$lib/server/fetch-page';
+import { FetchPageError, fetchImage, fetchRecipeSource } from '$lib/server/fetch-page';
 import { LlmError, runAssistant, type AssistantInput } from '$lib/server/llm';
 import { MAX_UPLOAD_BYTES, photoToDataUrl } from '$lib/server/photos';
 import { llmLimiter } from '$lib/server/rate-limit';
@@ -31,6 +31,12 @@ const Form = z
 	})
 	.refine((f) => f.message.trim() || f.photo, 'Send a message or a photo');
 
+async function pagePhotoDataUrl(imageUrl: string): Promise<string | undefined> {
+	const data = await fetchImage(imageUrl);
+	if (!data) return undefined;
+	return photoToDataUrl(data).catch(() => undefined);
+}
+
 export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 	if (!llmLimiter.hit(getClientAddress())) error(429, 'Too many assistant requests. Try again later.');
 
@@ -52,7 +58,13 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 	const input: AssistantInput = { message, current: current ?? null };
 	try {
 		const url = asUrl(message);
-		if (url) input.source = { url: url.href, ...(await fetchRecipeSource(url)) };
+		let pagePhoto: Promise<string | undefined> | undefined;
+		if (url) {
+			const { imageUrl, ...source } = await fetchRecipeSource(url);
+			input.source = { url: url.href, ...source };
+			// A new recipe from a link takes the page's picture along; downloaded while the model works.
+			if (imageUrl && !current && !parsed.data.photo) pagePhoto = pagePhotoDataUrl(imageUrl);
+		}
 		if (parsed.data.photo) {
 			try {
 				input.image = await photoToDataUrl(Buffer.from(await parsed.data.photo.arrayBuffer()));
@@ -64,11 +76,13 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 		if (!result.ok) return json(result satisfies AssistantResponse);
 
 		const draft = result.reply.draft ? finalizeDraft(result.reply.draft, current ?? null) : null;
+		const photo = draft ? await pagePhoto : undefined;
 		return json({
 			ok: true,
 			reply: result.reply.reply,
 			draft,
-			summary: draft ? describeDraft(draft) : null
+			summary: draft ? describeDraft(draft) : null,
+			...(photo ? { photo } : {})
 		} satisfies AssistantResponse);
 	} catch (e) {
 		if (e instanceof LlmError || e instanceof FetchPageError) {

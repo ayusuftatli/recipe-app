@@ -47,6 +47,13 @@
 	let changeNote = $state('');
 	let photoFile = $state<File | null>(untrack(() => initialPhoto));
 	let removePhoto = $state(false);
+	let importPreview = $state<string>();
+	$effect(() => {
+		if (!initialPhoto) return;
+		const url = URL.createObjectURL(initialPhoto);
+		importPreview = url;
+		return () => URL.revokeObjectURL(url);
+	});
 
 	let errors = $state<string[]>([]);
 	let rowErrors = $state<Record<string, string>>({});
@@ -286,7 +293,8 @@
 		{/if}
 		{#if photoFile && photoFile === initialPhoto}
 			<div class="row current-photo">
-				<span class="muted">Using the photo from the chat.</span>
+				{#if importPreview}<img src={importPreview} alt="" width="64" height="64" />{/if}
+				<span class="muted">Using the photo from the import.</span>
 				<button type="button" class="btn small" onclick={() => (photoFile = null)}>Don't use</button>
 			</div>
 		{/if}

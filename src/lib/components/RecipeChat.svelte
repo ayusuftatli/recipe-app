@@ -15,7 +15,7 @@
 
 	type Message =
 		| { role: 'user'; text: string; photo?: string }
-		| { role: 'assistant'; text: string; summary?: string | null }
+		| { role: 'assistant'; text: string; summary?: string | null; photo?: boolean }
 		| { role: 'error'; text: string; raw?: string };
 
 	let messages = $state<Message[]>([]);
@@ -62,14 +62,25 @@
 			} else if (!data.ok) {
 				messages.push({ role: 'error', text: data.error, raw: data.raw });
 			} else {
-				messages.push({ role: 'assistant', text: data.reply, summary: data.summary });
-				if (data.draft) onDraft(data.draft, data.reply, sentPhoto);
+				messages.push({ role: 'assistant', text: data.reply, summary: data.summary, photo: Boolean(data.draft && data.photo) });
+				if (data.draft) onDraft(data.draft, data.reply, sentPhoto ?? (await pagePhoto(data.photo)));
 			}
 		} catch {
 			messages.push({ role: 'error', text: 'Network error — are you online?' });
 		} finally {
 			busy = false;
 			scrollDown();
+		}
+	}
+
+	/** The picture the server found on an imported page, as a file the editor can upload. */
+	async function pagePhoto(dataUrl: string | undefined): Promise<File | null> {
+		if (!dataUrl) return null;
+		try {
+			const blob = await (await fetch(dataUrl)).blob();
+			return new File([blob], 'photo.jpg', { type: blob.type });
+		} catch {
+			return null;
 		}
 	}
 
@@ -99,7 +110,7 @@
 					{#if m.text}<div class="text">{m.text}</div>{/if}
 				{:else if m.role === 'assistant'}
 					<div class="text">{m.text}</div>
-					{#if m.summary}<div class="summary">✓ {m.summary}</div>{/if}
+					{#if m.summary}<div class="summary">✓ {m.summary}{m.photo ? ' · photo included' : ''}</div>{/if}
 				{:else}
 					<div class="text">{m.text}</div>
 					{#if m.raw}

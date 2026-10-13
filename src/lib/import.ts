@@ -95,8 +95,7 @@ function findRecipe(node: unknown): Record<string, unknown> | null {
 	return null;
 }
 
-/** Finds a schema.org Recipe in the page's JSON-LD blocks; returns it as JSON text or null. */
-export function extractJsonLdRecipe(html: string): string | null {
+function findJsonLdRecipe(html: string): Record<string, unknown> | null {
 	const re = /<script[^>]*type\s*=\s*["']?application\/ld\+json["']?[^>]*>([\s\S]*?)<\/script>/gi;
 	for (const match of html.matchAll(re)) {
 		let data: unknown;
@@ -106,14 +105,57 @@ export function extractJsonLdRecipe(html: string): string | null {
 			continue;
 		}
 		const recipe = findRecipe(data);
-		if (recipe) {
-			// Drop bulky fields the model doesn't need.
-			const { review, aggregateRating, video, image, author, publisher, ...rest } = recipe;
-			void [review, aggregateRating, video, image, author, publisher];
-			return JSON.stringify(rest).slice(0, MAX_SOURCE_CHARS);
-		}
+		if (recipe) return recipe;
 	}
 	return null;
+}
+
+/** Finds a schema.org Recipe in the page's JSON-LD blocks; returns it as JSON text or null. */
+export function extractJsonLdRecipe(html: string): string | null {
+	const recipe = findJsonLdRecipe(html);
+	if (!recipe) return null;
+	// Drop bulky fields the model doesn't need.
+	const { review, aggregateRating, video, image, author, publisher, ...rest } = recipe;
+	void [review, aggregateRating, video, image, author, publisher];
+	return JSON.stringify(rest).slice(0, MAX_SOURCE_CHARS);
+}
+
+/** schema.org `image` may be a URL, an ImageObject, or a list of either; the first one wins. */
+function jsonLdImage(image: unknown): string | null {
+	if (typeof image === 'string') return image;
+	if (Array.isArray(image)) {
+		for (const item of image) {
+			const found = jsonLdImage(item);
+			if (found) return found;
+		}
+		return null;
+	}
+	if (image && typeof image === 'object') return jsonLdImage((image as Record<string, unknown>)['url']);
+	return null;
+}
+
+function metaContent(html: string, name: string): string | null {
+	for (const [tag] of html.matchAll(/<meta\b[^>]*>/gi)) {
+		if (!new RegExp(`(?:property|name)\\s*=\\s*["']?${name}["'\\s/>]`, 'i').test(tag)) continue;
+		const content = /content\s*=\s*(?:"([^"]*)"|'([^']*)')/i.exec(tag);
+		if (content) return decodeEntities(content[1] ?? content[2] ?? '');
+	}
+	return null;
+}
+
+/**
+ * The page's one recipe picture as an absolute http(s) URL: the Recipe's
+ * JSON-LD image when present, else the page's og:image / twitter:image.
+ */
+export function extractImageUrl(html: string, pageUrl: string): string | null {
+	const candidate = jsonLdImage(findJsonLdRecipe(html)?.['image']) ?? metaContent(html, 'og:image') ?? metaContent(html, 'twitter:image');
+	if (!candidate?.trim()) return null;
+	try {
+		const url = new URL(candidate.trim(), pageUrl);
+		return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null;
+	} catch {
+		return null;
+	}
 }
 
 const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', frac12: '½', frac14: '¼', frac34: '¾', deg: '°' };

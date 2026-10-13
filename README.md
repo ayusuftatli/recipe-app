@@ -6,11 +6,11 @@ full spec and milestones.
 **Status:** Milestones 1 (CRUD, versions, photos, auth), 2 (LLM import) and 3 (scaling) are implemented.
 
 Adding and changing recipes happens mainly through the **assistant chat**:
-paste or type a recipe, send a link, or attach a photo of a recipe card, then
-review the parsed result before saving. Follow-up messages ("use 3 eggs, add
-1 tsp cumin") change the draft; on the edit page the same chat edits an
-existing recipe and pre-fills the version's change note. The form is still
-there for manual fixes.
+paste or type a recipe, send a link (the page's picture comes along), or
+attach a photo of a recipe card, then review the parsed result before saving.
+Follow-up messages ("use 3 eggs, add 1 tsp cumin") change the draft; on the
+edit page the same chat edits an existing recipe and pre-fills the version's
+change note. The form is still there for manual fixes.
 
 A recipe page can be **scaled** by servings, by total weight, by the amount
 of one ingredient you have, or shown as percentages of the total weight.

@@ -84,5 +84,12 @@ export function sameContent(a: RecipeDraft, b: RecipeDraft): boolean {
 
 /** Response of POST /api/assistant. */
 export type AssistantResponse =
-	| { ok: true; reply: string; draft: RecipeDraft | null; summary: string | null }
+	| {
+			ok: true;
+			reply: string;
+			draft: RecipeDraft | null;
+			summary: string | null;
+			/** data: URL of the picture found on an imported page (new recipes only). */
+			photo?: string;
+	  }
 	| { ok: false; error: string; raw?: string };
