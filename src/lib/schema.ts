@@ -23,15 +23,17 @@ export const Step = z.object({
 });
 export type Step = z.infer<typeof Step>;
 
+const Amount = z.number().finite().nonnegative();
+
 export const Nutrients = z.object({
-	kcal: z.number(),
-	protein_g: z.number(),
-	fat_g: z.number(),
-	sat_fat_g: z.number().optional(),
-	carbs_g: z.number(),
-	sugar_g: z.number().optional(),
-	fiber_g: z.number().optional(),
-	salt_g: z.number().optional()
+	kcal: Amount,
+	protein_g: Amount,
+	fat_g: Amount,
+	sat_fat_g: Amount.optional(),
+	carbs_g: Amount,
+	sugar_g: Amount.optional(),
+	fiber_g: Amount.optional(),
+	salt_g: Amount.optional()
 });
 export type Nutrients = z.infer<typeof Nutrients>;
 
@@ -71,3 +73,20 @@ export const AssistantReply = z.object({
 	draft: RecipeDraft.nullable()
 });
 export type AssistantReply = z.infer<typeof AssistantReply>;
+
+const FoodName = z.string().trim().min(1).max(200);
+
+/**
+ * Body of PUT /api/recipes/[id]/nutrition: the user's own choice of food for
+ * one ingredient. A database entry, values typed in by hand, or null for none.
+ */
+export const SetFoodRequest = z.object({
+	ingredient_id: z.string().min(1),
+	food: z
+		.discriminatedUnion('source', [
+			z.object({ source: z.enum(['usda', 'off']), source_id: z.string().min(1).max(100), name: FoodName, nutrients: Nutrients }),
+			z.object({ source: z.literal('manual'), name: FoodName, nutrients: Nutrients })
+		])
+		.nullable()
+});
+export type SetFoodRequest = z.infer<typeof SetFoodRequest>;

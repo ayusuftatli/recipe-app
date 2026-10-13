@@ -3,7 +3,7 @@
 Single-user recipe app (SvelteKit + SQLite). See [SPEC.md](SPEC.md) for the
 full spec and milestones.
 
-**Status:** Milestones 1 (CRUD, versions, photos, auth), 2 (LLM import), 3 (scaling) and 4 (PWA, offline, cooking mode) are implemented.
+**Status:** Milestones 1 (CRUD, versions, photos, auth), 2 (LLM import), 3 (scaling), 4 (PWA, offline, cooking mode) and 5 (nutrition) are implemented.
 
 Adding and changing recipes happens mainly through the **assistant chat**:
 paste or type a recipe, send a link (the page's picture comes along), or
@@ -23,6 +23,14 @@ scaling. Logging out removes the copy. "Start cooking" on a recipe opens
 **cooking mode**: large text, an ingredient checklist, one step at a time, and
 the screen kept awake where the browser supports it.
 
+**Nutrition** is calculated, never estimated by the LLM. "Calculate nutrition"
+on a recipe looks each ingredient up in USDA FoodData Central (falling back to
+Open Food Facts), lets the LLM pick the best candidate, and stores the chosen
+food. The recipe page then shows totals, per serving and per 100 g, with how
+many ingredients are covered. Ingredient names matched before are reused
+without any lookup, and every match can be changed by hand (search, or type in
+the values from a label).
+
 ## Local development
 
 ```sh
@@ -34,7 +42,7 @@ npm run dev              # migrations run automatically on start
 | Command | What it does |
 |---|---|
 | `npm run dev` | dev server |
-| `npm test` | Vitest unit tests (diff, form parsing, import helpers, LLM retry, scaling, offline search) |
+| `npm test` | Vitest unit tests (diff, form parsing, import helpers, LLM retry, scaling, offline search, nutrition) |
 | `npm run check` | svelte-check / TypeScript |
 | `npm run build && npm start` | production build (adapter-node) |
 | `npm run db:generate` | create a migration after editing `src/lib/server/db/schema.ts` |
@@ -54,6 +62,9 @@ npm run dev              # migrations run automatically on start
 4. For the assistant, set `OPENROUTER_API_KEY` and `LLM_MODEL` (an
    OpenRouter model id that supports JSON-schema output and image input).
    The token count and cost of each request are written to the server log.
+5. For nutrition, set `FDC_API_KEY` (free, from
+   <https://fdc.nal.usda.gov/api-key-signup>). Without it only Open Food
+   Facts is searched.
 
 ## Layout
 
@@ -69,4 +80,7 @@ npm run dev              # migrations run automatically on start
   build: `npm run build && npm start`)
 - `src/lib/offline.ts`, `src/lib/offline-view.ts` — the IndexedDB copy and its
   search/filter logic
+- `src/lib/nutrition.ts`, `src/lib/food-sources.ts` — nutrition math and
+  parsing of the food databases' answers (pure, tested);
+  `src/lib/server/nutrition.ts` does the matching
 - `src/routes/api/` — JSON API (validated with Zod); pages under `src/routes/`

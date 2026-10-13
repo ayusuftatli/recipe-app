@@ -1,4 +1,4 @@
-import type { Ingredient, RecipeDraft, Step } from './schema';
+import type { Ingredient, Nutrients, RecipeDraft, Step } from './schema';
 
 export interface RecipeVersion {
 	id: string;
@@ -93,3 +93,27 @@ export type AssistantResponse =
 			photo?: string;
 	  }
 	| { ok: false; error: string; raw?: string };
+
+/** A row of the `foods` table: values per 100 g from a food database or typed in by hand. */
+export interface Food {
+	id: string;
+	name: string;
+	source: 'usda' | 'off' | 'manual';
+	source_id: string | null;
+	nutrients: Nutrients;
+}
+
+/** Response of POST /api/recipes/[id]/nutrition ("Calculate nutrition"). */
+export type MatchResponse =
+	| {
+			ok: true;
+			/** Ingredients newly matched in this run. */
+			matched: number;
+			/** Of those, how many were reused from earlier matches without any lookup. */
+			reused: number;
+			/** Ingredients no suitable food was found for. */
+			unmatched: number;
+			/** The version created for the new matches, if any. */
+			version_number: number | null;
+	  }
+	| { ok: false; error: string };

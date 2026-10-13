@@ -1,6 +1,7 @@
 import { and, desc, eq, sql, type SQL } from 'drizzle-orm';
 import { db } from './db';
 import { recipes, recipeVersions } from './db/schema';
+import { dropStaleFoodIds } from '$lib/food-sources';
 import { Ingredient, Step, Tags, type RecipeDraft } from '$lib/schema';
 import type { RecipeDetail, RecipeSummary, RecipeVersion, VersionMeta } from '$lib/types';
 import { normalizeDraft, sameContent, versionToDraft } from '$lib/types';
@@ -210,6 +211,7 @@ export function saveRecipe(recipeId: string, draft: RecipeDraft, tags: string[],
 		const now = new Date().toISOString();
 		const currentVersion = toVersion(current.version);
 		const newTags = JSON.stringify(uniqueTags(tags));
+		draft = { ...draft, ingredients: dropStaleFoodIds(currentVersion.ingredients, draft.ingredients) };
 
 		if (sameContent(versionToDraft(currentVersion), draft)) {
 			tx.update(recipes).set({ tags: newTags, updatedAt: now }).where(eq(recipes.id, recipeId)).run();

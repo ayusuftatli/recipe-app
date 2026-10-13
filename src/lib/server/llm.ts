@@ -1,11 +1,22 @@
+import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { env } from '$env/dynamic/private';
 import { AssistantReply, type RecipeDraft } from '$lib/schema';
 import { completeStructured, type ChatMessage, type Complete, type ContentPart } from '$lib/llm-structured';
 
+interface ResponseFormat {
+	name: string;
+	schema: Record<string, unknown>;
+}
+
 // Generated from the Zod schema, so the model's contract and the app's validation can't drift.
-const { $schema, ...REPLY_JSON_SCHEMA } = zodToJsonSchema(AssistantReply, { $refStrategy: 'none' }) as Record<string, unknown>;
-void $schema;
+function responseFormat(name: string, schema: z.ZodTypeAny): ResponseFormat {
+	const { $schema, ...jsonSchema } = zodToJsonSchema(schema, { $refStrategy: 'none' }) as Record<string, unknown>;
+	void $schema;
+	return { name, schema: jsonSchema };
+}
+
+const REPLY_FORMAT = responseFormat('assistant_reply', AssistantReply);
 
 const SYSTEM_PROMPT = `You are the recipe assistant inside a personal recipe app. You turn what the user sends (pasted text, a web page, a photo of a recipe, or a request to change the current recipe) into structured recipe data.
 
@@ -36,7 +47,7 @@ interface OpenRouterResponse {
 	error?: { message?: string };
 }
 
-function openRouterComplete(): Complete {
+function openRouterComplete(format: ResponseFormat): Complete {
 	const apiKey = env.OPENROUTER_API_KEY;
 	const model = env.LLM_MODEL;
 	if (!apiKey || !model) throw new LlmError('The assistant is not configured: set OPENROUTER_API_KEY and LLM_MODEL.');
@@ -55,7 +66,7 @@ function openRouterComplete(): Complete {
 					temperature: 0.2,
 					response_format: {
 						type: 'json_schema',
-						json_schema: { name: 'assistant_reply', strict: false, schema: REPLY_JSON_SCHEMA }
+						json_schema: { name: format.name, strict: false, schema: format.schema }
 					},
 					usage: { include: true }
 				}),
@@ -110,7 +121,7 @@ function buildUserContent(input: AssistantInput): string | ContentPart[] {
 	return input.image ? [{ type: 'text', text }, { type: 'image_url', image_url: { url: input.image } }] : text;
 }
 
-export async function runAssistant(input: AssistantInput, complete: Complete = openRouterComplete()): Promise<AssistantResult> {
+export async function runAssistant(input: AssistantInput, complete: Complete = openRouterComplete(REPLY_FORMAT)): Promise<AssistantResult> {
 	const messages: ChatMessage[] = [
 		{ role: 'system', content: SYSTEM_PROMPT },
 		{ role: 'user', content: buildUserContent(input) }
@@ -119,4 +130,69 @@ export async function runAssistant(input: AssistantInput, complete: Complete = o
 	if (result.ok) return { ok: true, reply: result.data };
 	console.warn('[llm] invalid output after retry:', result.errors.slice(0, 5).join('; '));
 	return { ok: false, error: 'The assistant returned something that is not a valid recipe.', raw: result.raw };
+}
+
+// ---- Nutrition matching (spec 4.5). The model only picks; it never supplies numbers. ----
+
+const SearchTerms = z.object({ terms: z.array(z.object({ id: z.string(), queries: z.array(z.string()) })) });
+const SEARCH_TERMS_FORMAT = responseFormat('food_search_terms', SearchTerms);
+
+const SEARCH_TERMS_PROMPT = `You prepare search queries for a food composition database (USDA FoodData Central, English only).
+
+For each recipe ingredient, write one or two short English queries likely to find the plain, generic food: translate to English, drop brands, quantities and preparation, and add the state when it matters (e.g. "raw", "dry", "cooked", "canned"). Put the most specific query first; add a second one when the database may file the food under a broader or different name. Examples: "Tellerlinsen" -> ["lentils, raw"]; "2 large eggs" -> ["egg, whole, raw"]; "red onion, finely chopped" -> ["onions, red, raw", "onions, raw"]; "spaghetti" -> ["spaghetti, dry", "pasta, dry"]; "olive oil" -> ["oil, olive"]; "plain flour" -> ["wheat flour, white, all-purpose"].
+
+Answer with one JSON object: {"terms": [{"id": the ingredient's id, "queries": [string, ...]}]}, one entry per ingredient.`;
+
+/** English database queries (at most two each) for ingredient names, by ingredient id. Ingredients the model skips are simply absent. */
+export async function foodSearchTerms(
+	items: { id: string; ingredient: string }[],
+	complete: Complete = openRouterComplete(SEARCH_TERMS_FORMAT)
+): Promise<Map<string, string[]>> {
+	const result = await completeStructured(
+		complete,
+		[
+			{ role: 'system', content: SEARCH_TERMS_PROMPT },
+			{ role: 'user', content: JSON.stringify(items) }
+		],
+		SearchTerms
+	);
+	if (!result.ok) throw new LlmError('The assistant could not prepare the food search.');
+	const known = new Set(items.map((i) => i.id));
+	const out = new Map<string, string[]>();
+	for (const t of result.data.terms) {
+		const queries = [...new Set(t.queries.map((q) => q.trim()).filter(Boolean))].slice(0, 2);
+		if (known.has(t.id) && queries.length > 0) out.set(t.id, queries);
+	}
+	return out;
+}
+
+const FoodChoices = z.object({ choices: z.array(z.object({ id: z.string(), candidate: z.string() })) });
+const FOOD_CHOICES_FORMAT = responseFormat('food_choices', FoodChoices);
+
+const FOOD_CHOICES_PROMPT = `You match recipe ingredients to entries of a food database so that nutrition can be calculated.
+
+Each ingredient comes with numbered candidates. Pick the candidate that best represents the ingredient as it goes into the recipe: prefer the plain, generic, raw or uncooked form unless the ingredient says otherwise, and avoid branded or prepared products when a generic entry exists. If no candidate is a reasonable match, answer "none"; a wrong match is worse than none.
+
+Answer with one JSON object: {"choices": [{"id": the ingredient's id, "candidate": the candidate's number as a string, or "none"}]}, one entry per ingredient. Do not output anything else, and never output nutrition values.`;
+
+/** The model's pick per ingredient id: a candidate number ("1" = first) or "none". Validate with `pickCandidate`. */
+export async function chooseFoods(
+	items: { id: string; ingredient: string; candidates: string[] }[],
+	complete: Complete = openRouterComplete(FOOD_CHOICES_FORMAT)
+): Promise<Map<string, string>> {
+	const payload = items.map((i) => ({
+		id: i.id,
+		ingredient: i.ingredient,
+		candidates: i.candidates.map((name, n) => `${n + 1}: ${name}`)
+	}));
+	const result = await completeStructured(
+		complete,
+		[
+			{ role: 'system', content: FOOD_CHOICES_PROMPT },
+			{ role: 'user', content: JSON.stringify(payload) }
+		],
+		FoodChoices
+	);
+	if (!result.ok) throw new LlmError('The assistant could not choose between the food candidates.');
+	return new Map(result.data.choices.map((c) => [c.id, c.candidate]));
 }

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
+	import NutritionPanel from '$lib/components/NutritionPanel.svelte';
 	import RecipeView from '$lib/components/RecipeView.svelte';
 	import { photoUrl } from '$lib/format';
 	import type { RecipeDraft } from '$lib/schema';
@@ -40,6 +41,7 @@
 {#key recipe.current.id}
 	<RecipeView version={recipe.current} scalable onSaveScaled={saveScaled} />
 {/key}
+<NutritionPanel recipeId={recipe.id} version={recipe.current} foods={data.foods} onChanged={invalidateAll} />
 
 <form method="POST" action={recipe.archived ? '?/unarchive' : '?/archive'} use:enhance class="archive-form">
 	<button class="btn small" type="submit">{recipe.archived ? 'Unarchive' : 'Archive'}</button>
