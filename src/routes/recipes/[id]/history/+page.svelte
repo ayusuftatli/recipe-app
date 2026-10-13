@@ -7,8 +7,7 @@
 
 <svelte:head><title>History · {data.recipe.current.title}</title></svelte:head>
 
-<p class="back"><a href="/recipes/{data.recipe.id}">← {data.recipe.current.title}</a></p>
-<h1>Version history</h1>
+<h1>{data.recipe.current.title}</h1>
 
 <form method="GET" class="compare">
 	<p class="muted">Pick two versions (A and B) to compare.</p>
@@ -41,9 +40,6 @@
 {/if}
 
 <style>
-	.back {
-		margin: 12px 0 0;
-	}
 	.timeline {
 		list-style: none;
 		padding: 0;

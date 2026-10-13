@@ -9,8 +9,6 @@
 
 <svelte:head><title>v{data.version.version_number} · {data.version.title}</title></svelte:head>
 
-<p class="back"><a href="/recipes/{data.recipe.id}/history">← History</a></p>
-
 <div class="card banner">
 	<strong>Version {data.version.version_number}</strong>
 	{#if isCurrent}<span class="badge">current</span>{/if}
@@ -31,9 +29,6 @@
 </div>
 
 <style>
-	.back {
-		margin: 12px 0 0;
-	}
 	.banner {
 		margin-top: 12px;
 	}

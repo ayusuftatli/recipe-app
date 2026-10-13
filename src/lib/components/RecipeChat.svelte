@@ -2,6 +2,7 @@
 	import { tick } from 'svelte';
 	import type { RecipeDraft } from '$lib/schema';
 	import type { AssistantResponse } from '$lib/types';
+	import Icon from './Icon.svelte';
 
 	interface Props {
 		/** Returns the recipe being edited (to refine), or null to start a new one. */
@@ -9,9 +10,11 @@
 		onDraft: (draft: RecipeDraft, reply: string, photo: File | null) => void;
 		placeholder: string;
 		intro?: string;
+		/** Called when a message goes out, before the reply is in. */
+		onSend?: () => void;
 	}
 
-	let { getCurrent, onDraft, placeholder, intro }: Props = $props();
+	let { getCurrent, onDraft, placeholder, intro, onSend }: Props = $props();
 
 	type Message =
 		| { role: 'user'; text: string; photo?: string }
@@ -25,6 +28,16 @@
 	let fileInput = $state<HTMLInputElement>();
 	let textarea = $state<HTMLTextAreaElement>();
 	let log = $state<HTMLElement>();
+
+	/** Puts the cursor in the message box. */
+	export function focus() {
+		textarea?.focus();
+	}
+
+	/** Opens the camera or the photo picker. */
+	export function choosePhoto() {
+		fileInput?.click();
+	}
 
 	async function scrollDown() {
 		await tick();
@@ -47,6 +60,7 @@
 		photo = null;
 		if (fileInput) fileInput.value = '';
 		busy = true;
+		onSend?.();
 		scrollDown();
 
 		const form = new FormData();
@@ -106,11 +120,11 @@
 		{#each messages as m, i (i)}
 			<div class="msg {m.role}">
 				{#if m.role === 'user'}
-					{#if m.photo}<div class="attachment">📷 {m.photo}</div>{/if}
+					{#if m.photo}<div class="attachment"><Icon name="camera" size={16} /> {m.photo}</div>{/if}
 					{#if m.text}<div class="text">{m.text}</div>{/if}
 				{:else if m.role === 'assistant'}
 					<div class="text">{m.text}</div>
-					{#if m.summary}<div class="summary">✓ {m.summary}{m.photo ? ' · photo included' : ''}</div>{/if}
+					{#if m.summary}<div class="summary"><Icon name="check" size={16} /> {m.summary}{m.photo ? ' · photo included' : ''}</div>{/if}
 				{:else}
 					<div class="text">{m.text}</div>
 					{#if m.raw}
@@ -135,8 +149,8 @@
 	>
 		{#if photo}
 			<div class="chip-row">
-				<span class="chip">📷 {photo.name}</span>
-				<button type="button" class="icon-btn" aria-label="Remove photo" onclick={() => { photo = null; if (fileInput) fileInput.value = ''; }}>✕</button>
+				<span class="chip"><Icon name="camera" size={16} /> {photo.name}</span>
+				<button type="button" class="icon-btn" aria-label="Remove photo" onclick={() => { photo = null; if (fileInput) fileInput.value = ''; }}><Icon name="close" size={18} /></button>
 			</div>
 		{/if}
 		<textarea
@@ -149,7 +163,7 @@
 		></textarea>
 		<div class="buttons">
 			<label class="btn" title="Add a photo of a recipe">
-				📷 Photo
+				<Icon name="camera" /> Photo
 				<input
 					bind:this={fileInput}
 					type="file"
@@ -208,11 +222,17 @@
 		color: var(--muted);
 	}
 	.summary {
+		display: flex;
+		align-items: center;
+		gap: 6px;
 		margin-top: 4px;
 		font-size: 0.9rem;
 		color: var(--muted);
 	}
 	.attachment {
+		display: flex;
+		align-items: center;
+		gap: 6px;
 		font-size: 0.85rem;
 		opacity: 0.85;
 	}
@@ -230,6 +250,12 @@
 		display: flex;
 		align-items: center;
 		gap: 4px;
+	}
+	.chip-row .chip {
+		gap: 6px;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 	.buttons {
 		display: flex;

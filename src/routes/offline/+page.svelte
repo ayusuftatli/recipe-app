@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import Icon from '$lib/components/Icon.svelte';
+	import RecipeCard from '$lib/components/RecipeCard.svelte';
 	import RecipeView from '$lib/components/RecipeView.svelte';
 	import { loadOffline } from '$lib/offline';
 	import { filterRecipes, OFFLINE_PATH, tagsOf } from '$lib/offline-view';
@@ -57,11 +59,12 @@
 {:else if id}
 	<p class="back">
 		<a
+			class="link-btn"
 			href={OFFLINE_PATH}
 			onclick={(e) => {
 				e.preventDefault();
 				location.hash = '';
-			}}>← All recipes</a
+			}}><Icon name="back" size={18} /> All recipes</a
 		>
 	</p>
 	{#if recipe}
@@ -69,11 +72,11 @@
 		{#if thumb}<img class="hero" src={thumb} alt="" />{/if}
 		<h1>{recipe.current.title}</h1>
 		<div class="row meta">
-			<span class="badge">v{recipe.current.version_number}</span>
 			{#each recipe.tags as t (t)}<span class="chip">{t}</span>{/each}
+			<span class="muted version">Version {recipe.current.version_number}</span>
 		</div>
 		{#key recipe.current.id}
-			<RecipeView version={recipe.current} scalable />
+			<RecipeView version={recipe.current} scalable pinCook />
 		{/key}
 	{:else}
 		<p class="muted empty">This recipe is not saved on this device.</p>
@@ -82,6 +85,7 @@
 	<p class="muted empty">No recipes are saved on this device yet. Open the app once while online and they will be here next time.</p>
 {:else}
 	<div class="search">
+		<Icon name="search" />
 		<input type="search" placeholder="Search title or ingredient" bind:value={q} aria-label="Search" />
 	</div>
 	{#if tags.length}
@@ -95,21 +99,10 @@
 	{#if shown.length === 0}
 		<p class="muted empty">No recipes match.</p>
 	{:else}
-		<ul class="list">
+		<ul class="grid">
 			{#each shown as r (r.id)}
-				{@const thumb = r.photo_path ? thumbs[r.photo_path] : undefined}
 				<li>
-					<a href="#{r.id}" class="item">
-						{#if thumb}
-							<img src={thumb} alt="" width="64" height="64" />
-						{:else}
-							<div class="ph" aria-hidden="true">🍽</div>
-						{/if}
-						<div class="info">
-							<div class="title">{r.current.title}</div>
-							{#if r.tags.length}<div class="tags">{r.tags.join(' · ')}</div>{/if}
-						</div>
-					</a>
+					<RecipeCard href="#{r.id}" title={r.current.title} tags={r.tags} photo={r.photo_path ? thumbs[r.photo_path] : undefined} />
 				</li>
 			{/each}
 		</ul>
@@ -118,78 +111,67 @@
 
 <style>
 	.search {
+		position: relative;
 		margin-top: 12px;
+	}
+	.search :global(.icon) {
+		position: absolute;
+		left: 14px;
+		top: 14px;
+		color: var(--muted);
+		pointer-events: none;
+	}
+	.search input {
+		min-height: 48px;
+		padding-left: 44px;
+		border-radius: 12px;
 	}
 	.chips {
 		display: flex;
-		gap: 6px;
+		gap: 8px;
 		overflow-x: auto;
-		padding: 10px 0 4px;
+		margin: 0 -16px;
+		padding: 12px 16px 4px;
 		scrollbar-width: none;
 	}
 	.chips .chip {
+		min-height: 36px;
 		cursor: pointer;
 	}
-	.list {
+	.grid {
 		list-style: none;
 		padding: 0;
-		margin: 8px 0 0;
+		margin: 12px 0 0;
 		display: grid;
-		gap: 8px;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 14px;
 	}
-	.item {
-		display: flex;
-		gap: 12px;
-		align-items: center;
-		padding: 8px;
-		background: var(--surface);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		text-decoration: none;
-		color: var(--text);
+	@media (min-width: 560px) {
+		.grid {
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+		}
 	}
-	.item img,
-	.ph {
-		width: 64px;
-		height: 64px;
-		border-radius: 8px;
-		object-fit: cover;
-		flex-shrink: 0;
-	}
-	.ph {
-		display: grid;
-		place-items: center;
-		background: var(--bg);
-		font-size: 1.5rem;
-	}
-	.info {
-		min-width: 0;
-	}
-	.title {
-		font-weight: 600;
-	}
-	.tags {
-		font-size: 0.85rem;
-		color: var(--muted);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
+	@media (min-width: 720px) {
+		.grid {
+			grid-template-columns: repeat(4, minmax(0, 1fr));
+		}
 	}
 	.empty {
 		margin-top: 32px;
 		text-align: center;
 	}
 	.back {
-		margin: 12px 0 0;
+		margin: 4px 0 0;
 	}
 	.hero {
 		display: block;
 		width: calc(100% + 32px);
-		margin: 12px -16px 0;
+		margin: 4px -16px 0;
 		max-height: 50vh;
 		object-fit: cover;
 	}
-	.meta {
-		margin-bottom: 4px;
+	.version {
+		margin-left: auto;
+		font-size: 0.9rem;
 	}
 </style>

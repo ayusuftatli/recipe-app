@@ -2,6 +2,7 @@
 	import { formatGrams } from '$lib/format';
 	import { roundGrams, totalGrams, type ScaleMode } from '$lib/scaling';
 	import type { RecipeVersion } from '$lib/types';
+	import Icon from './Icon.svelte';
 
 	let {
 		version,
@@ -9,6 +10,7 @@
 		target = $bindable(),
 		anchorId = $bindable(),
 		factor,
+		hasStepper = false,
 		onSave,
 		saving = false,
 		error = ''
@@ -20,11 +22,15 @@
 		anchorId: string;
 		/** The factor the current input gives, or null if it is not usable. */
 		factor: number | null;
+		/** Servings already have a stepper next to the ingredients, so this is the place for the other ways. */
+		hasStepper?: boolean;
 		/** Omit to hide "Save as new version". */
 		onSave?: () => void;
 		saving?: boolean;
 		error?: string;
 	} = $props();
+
+	let open = $state(false);
 
 	const total = $derived(totalGrams(version.ingredients));
 	const anchors = $derived(version.ingredients.filter((i) => i.grams !== null && i.grams > 0));
@@ -63,76 +69,105 @@
 	}
 </script>
 
-<div class="card scale">
-	<div class="row" role="group" aria-label="Scale recipe">
-		{#each modes as m (m.id)}
-			<button
-				type="button"
-				class="chip"
-				class:active={mode === m.id}
-				aria-pressed={mode === m.id}
-				disabled={!m.enabled}
-				onclick={() => select(m.id)}
-			>
-				{m.label}
-			</button>
-		{/each}
-	</div>
+<div class="scale">
+	<button type="button" class="link-btn toggle" class:open aria-expanded={open} onclick={() => (open = !open)}>
+		{hasStepper ? 'More ways to scale' : 'Scale this recipe'}
+		<Icon name="down" size={16} />
+	</button>
 
-	{#if mode === 'servings'}
-		<div class="field">
-			<label for="scale-target">Servings (recipe makes {version.servings})</label>
-			<input id="scale-target" type="text" inputmode="decimal" autocomplete="off" bind:value={target} />
-		</div>
-	{:else if mode === 'weight'}
-		<div class="field">
-			<label for="scale-target">Total weight in grams (recipe is {formatGrams(roundGrams(total))})</label>
-			<input id="scale-target" type="text" inputmode="decimal" autocomplete="off" bind:value={target} />
-		</div>
-	{:else if mode === 'anchor'}
-		<div class="field">
-			<label for="scale-anchor">Ingredient you have</label>
-			<select id="scale-anchor" bind:value={anchorId} onchange={() => (target = anchorGrams(anchorId))}>
-				{#each anchors as i (i.id)}
-					<option value={i.id}>{i.name} ({formatGrams(i.grams)})</option>
+	{#if open}
+		<div class="card">
+			<div class="row" role="group" aria-label="Scale recipe">
+				{#each modes as m (m.id)}
+					<button
+						type="button"
+						class="chip"
+						class:active={mode === m.id}
+						aria-pressed={mode === m.id}
+						disabled={!m.enabled}
+						onclick={() => select(m.id)}
+					>
+						{m.label}
+					</button>
 				{/each}
-			</select>
+			</div>
+
+			{#if mode === 'servings'}
+				<div class="field">
+					<label for="scale-target">Servings (recipe makes {version.servings})</label>
+					<input id="scale-target" type="text" inputmode="decimal" autocomplete="off" bind:value={target} />
+				</div>
+			{:else if mode === 'weight'}
+				<div class="field">
+					<label for="scale-target">Total weight in grams (recipe is {formatGrams(roundGrams(total))})</label>
+					<input id="scale-target" type="text" inputmode="decimal" autocomplete="off" bind:value={target} />
+				</div>
+			{:else if mode === 'anchor'}
+				<div class="field">
+					<label for="scale-anchor">Ingredient you have</label>
+					<select id="scale-anchor" bind:value={anchorId} onchange={() => (target = anchorGrams(anchorId))}>
+						{#each anchors as i (i.id)}
+							<option value={i.id}>{i.name} ({formatGrams(i.grams)})</option>
+						{/each}
+					</select>
+				</div>
+				<div class="field">
+					<label for="scale-target">Grams available</label>
+					<input id="scale-target" type="text" inputmode="decimal" autocomplete="off" bind:value={target} />
+				</div>
+			{/if}
+
+			{#if mode === 'servings' || mode === 'weight' || mode === 'anchor'}
+				{#if factor === null}
+					<p class="error hint">Enter an amount greater than 0.</p>
+				{:else if factor === 1}
+					<p class="muted hint">Same as the recipe</p>
+				{/if}
+			{/if}
+
+			{#if someDisabled}
+				<p class="muted hint small">
+					{#if version.servings === null}Add a servings count to scale by servings.{/if}
+					{#if total <= 0}Add ingredient weights to scale by weight.{/if}
+				</p>
+			{/if}
 		</div>
-		<div class="field">
-			<label for="scale-target">Grams available</label>
-			<input id="scale-target" type="text" inputmode="decimal" autocomplete="off" bind:value={target} />
-		</div>
-	{:else if mode === 'percent'}
-		<p class="muted hint">Each ingredient as a share of the total weight ({formatGrams(roundGrams(total))}).</p>
 	{/if}
 
-	{#if mode === 'servings' || mode === 'weight' || mode === 'anchor'}
-		{#if factor === null}
-			<p class="error hint">Enter an amount greater than 0.</p>
-		{:else}
-			<div class="row result">
-				<span class="muted">{factor === 1 ? 'Same as the recipe' : `Scaled ${formatFactor(factor)}`}</span>
-				{#if onSave && factor !== 1}
+	<!-- Shown whether or not the options are open, so a scaled recipe always says so. -->
+	{#if mode === 'percent'}
+		<div class="row result">
+			<span class="muted">Each ingredient as a share of the total weight ({formatGrams(roundGrams(total))})</span>
+			<button type="button" class="btn small" onclick={() => select('off')}>Reset</button>
+		</div>
+	{:else if factor !== null && factor !== 1}
+		<div class="row result">
+			<span class="muted">Scaled {formatFactor(factor)}</span>
+			<span class="row">
+				<button type="button" class="btn small" onclick={() => select('off')}>Reset</button>
+				{#if onSave}
 					<button type="button" class="btn small" disabled={saving} onclick={onSave}>
 						{saving ? 'Saving…' : 'Save as new version'}
 					</button>
 				{/if}
-			</div>
-		{/if}
+			</span>
+		</div>
 	{/if}
 	{#if error}<p class="error hint">{error}</p>{/if}
-
-	{#if someDisabled}
-		<p class="muted hint small">
-			{#if version.servings === null}Add a servings count to scale by servings.{/if}
-			{#if total <= 0}Add ingredient weights to scale by weight.{/if}
-		</p>
-	{/if}
 </div>
 
 <style>
 	.scale {
-		margin-top: 12px;
+		margin-bottom: 4px;
+	}
+	.toggle :global(.icon) {
+		transition: transform 0.15s;
+	}
+	.toggle.open :global(.icon) {
+		transform: rotate(180deg);
+	}
+	.card {
+		margin-bottom: 8px;
 	}
 	button.chip {
 		min-height: 36px;
@@ -152,7 +187,12 @@
 		font-size: 0.85rem;
 	}
 	.result {
-		margin-top: 10px;
+		margin-bottom: 8px;
 		justify-content: space-between;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.toggle :global(.icon) {
+			transition: none;
+		}
 	}
 </style>

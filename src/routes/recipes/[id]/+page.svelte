@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
+	import Icon from '$lib/components/Icon.svelte';
 	import NutritionPanel from '$lib/components/NutritionPanel.svelte';
 	import RecipeView from '$lib/components/RecipeView.svelte';
 	import { photoUrl } from '$lib/format';
@@ -37,25 +38,22 @@
 
 <h1>{recipe.current.title}</h1>
 <div class="row meta">
-	<a class="badge" href="/recipes/{recipe.id}/history" title="Version history">v{recipe.current.version_number}</a>
 	{#each recipe.tags as t (t)}
 		<a class="chip" href="/?tag={encodeURIComponent(t)}">{t}</a>
 	{/each}
+	<a class="link-btn version" href="/recipes/{recipe.id}/history" title="Version history">
+		<Icon name="history" size={16} /> Version {recipe.current.version_number}
+	</a>
 </div>
 
 {#key amountsKey}
-	<RecipeView version={recipe.current} scalable onSaveScaled={saveScaled} />
+	<RecipeView version={recipe.current} scalable pinCook onSaveScaled={saveScaled} />
 {/key}
 <NutritionPanel recipeId={recipe.id} version={recipe.current} foods={data.foods} matching={data.matching} onChanged={invalidateAll} />
 
 <form method="POST" action={recipe.archived ? '?/unarchive' : '?/archive'} use:enhance class="archive-form">
-	<button class="btn small" type="submit">{recipe.archived ? 'Unarchive' : 'Archive'}</button>
+	<button class="link-btn quiet" type="submit">{recipe.archived ? 'Unarchive this recipe' : 'Archive this recipe'}</button>
 </form>
-
-<div class="action-bar">
-	<a class="btn" href="/recipes/{recipe.id}/history">History</a>
-	<a class="btn primary" href="/recipes/{recipe.id}/edit">Edit</a>
-</div>
 
 <style>
 	.hero {
@@ -65,13 +63,14 @@
 		max-height: 50vh;
 		object-fit: cover;
 	}
-	.meta {
-		margin-bottom: 4px;
-	}
 	.archived {
 		margin-top: 12px;
 	}
+	.version {
+		margin-left: auto;
+		gap: 6px;
+	}
 	.archive-form {
-		margin-top: 32px;
+		margin-top: 24px;
 	}
 </style>

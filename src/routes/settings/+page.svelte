@@ -58,7 +58,7 @@
 
 <svelte:head><title>Settings · Recipe Box</title></svelte:head>
 
-<h1>Settings</h1>
+<h1 class="sr-only">Settings</h1>
 
 <h2>Archived recipes</h2>
 {#if data.archived.length === 0}

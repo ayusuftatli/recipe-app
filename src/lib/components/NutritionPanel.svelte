@@ -4,6 +4,7 @@
 	import { computeNutrition, formatNutrient, NUTRIENT_KEYS, NUTRIENT_LABELS, type NutrientKey } from '$lib/nutrition';
 	import type { Ingredient, Nutrients, SetFoodRequest } from '$lib/schema';
 	import type { Food, MatchStatus, RecipeVersion } from '$lib/types';
+	import Icon from './Icon.svelte';
 
 	let {
 		recipeId,
@@ -31,6 +32,23 @@
 	const noWeight = $derived(counted.filter((i) => i.grams === null).length);
 	/** Not decided yet and able to contribute: what background matching still has to find. */
 	const open = $derived(counted.filter((i) => i.grams !== null && i.food_id === undefined).length);
+
+	/** The four headline figures, on the most useful basis the recipe allows. */
+	const summary = $derived(
+		result.matched === 0
+			? null
+			: result.perServing
+				? { basis: 'per serving', values: result.perServing }
+				: result.per100g
+					? { basis: 'per 100 g', values: result.per100g }
+					: { basis: 'whole recipe', values: result.totals }
+	);
+	const TILES = [
+		{ key: 'kcal', label: 'kcal', unit: '' },
+		{ key: 'protein_g', label: 'protein', unit: ' g' },
+		{ key: 'fat_g', label: 'fat', unit: ' g' },
+		{ key: 'carbs_g', label: 'carbs', unit: ' g' }
+	] as const;
 
 	const coverage = $derived(
 		`${result.matched} of ${result.counted} ingredients matched` +
@@ -153,50 +171,75 @@
 	}
 </script>
 
-<h2>Nutrition</h2>
+<div class="section-head">
+	<h2>Nutrition</h2>
+	{#if summary}<span class="muted basis">{summary.basis}</span>{/if}
+</div>
 
-{#if result.matched > 0}
-	<div class="table-wrap">
-		<table>
-			<thead>
-				<tr>
-					<th></th>
-					<th>Total</th>
-					{#if result.perServing}<th>Per serving</th>{/if}
-					{#if result.per100g}<th>Per 100 g</th>{/if}
-				</tr>
-			</thead>
-			<tbody>
-				{#each rows as key (key)}
-					<tr class:sub={key === 'sat_fat_g' || key === 'sugar_g'}>
-						<th scope="row">{NUTRIENT_LABELS[key]}</th>
-						<td>{formatNutrient(key, result.totals[key])}</td>
-						{#if result.perServing}<td>{formatNutrient(key, result.perServing[key])}</td>{/if}
-						{#if result.per100g}<td>{formatNutrient(key, result.per100g[key])}</td>{/if}
-					</tr>
-				{/each}
-			</tbody>
-		</table>
-	</div>
+{#if summary}
+	<ul class="tiles">
+		{#each TILES as tile (tile.key)}
+			<li>
+				<strong>{formatNutrient(tile.key, summary.values[tile.key])}{tile.unit}</strong>
+				<span class="muted">{tile.label}</span>
+			</li>
+		{/each}
+	</ul>
 {:else if !polling}
 	<p class="muted">{counted.length > 0 ? 'No ingredient is matched to a food yet.' : 'No ingredients.'}</p>
 {/if}
 
-{#if counted.length > 0}
-	<p class="coverage" class:partial={result.matched < result.counted}>
-		{coverage}
-	</p>
+{#if summary && result.matched < result.counted}
+	<p class="coverage">{coverage}</p>
 {/if}
 
 {#if polling}
 	<p class="muted note" role="status">Matching ingredients in the background…</p>
 {:else if open > 0}
-	<button type="button" class="btn small" onclick={retry}>Try matching again</button>
+	<button type="button" class="btn small retry" onclick={retry}>Try matching again</button>
 {/if}
 {#if error}<p class="error note">{error}</p>{/if}
 
+<!-- The detail is one tap away: the full table, and which food each ingredient was matched to. -->
+{#if summary || version.ingredients.length > 0}
+<div class="folds">
+{#if summary}
+	<details>
+		<summary><span class="grow">All values</span><Icon name="down" size={18} /></summary>
+		<div class="table-wrap">
+			<table>
+				<thead>
+					<tr>
+						<th></th>
+						<th>Total</th>
+						{#if result.perServing}<th>Per serving</th>{/if}
+						{#if result.per100g}<th>Per 100 g</th>{/if}
+					</tr>
+				</thead>
+				<tbody>
+					{#each rows as key (key)}
+						<tr class:sub={key === 'sat_fat_g' || key === 'sugar_g'}>
+							<th scope="row">{NUTRIENT_LABELS[key]}</th>
+							<td>{formatNutrient(key, result.totals[key])}</td>
+							{#if result.perServing}<td>{formatNutrient(key, result.perServing[key])}</td>{/if}
+							{#if result.per100g}<td>{formatNutrient(key, result.per100g[key])}</td>{/if}
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
+	</details>
+{/if}
+
 {#if version.ingredients.length > 0}
-	<h3>Foods used</h3>
+	<details>
+		<summary>
+			<span class="grow">Foods used</span>
+			{#if counted.length > 0}
+				<span class="badge" class:warn={result.matched < result.counted}>{result.matched} of {result.counted} matched</span>
+			{/if}
+			<Icon name="down" size={18} />
+		</summary>
 	<ul class="matches">
 			{#each version.ingredients as ing (ing.id)}
 				{@const food = ing.food_id ? foods[ing.food_id] : undefined}
@@ -270,12 +313,87 @@
 				</li>
 			{/each}
 	</ul>
-	<p class="muted food">Changing a match saves a new version of the recipe.</p>
+	<p class="muted food last">Changing a match saves a new version of the recipe.</p>
+	</details>
+{/if}
+</div>
 {/if}
 
 <style>
+	.basis {
+		font-size: 0.9rem;
+	}
+	.tiles {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		gap: 8px;
+	}
+	.tiles li {
+		display: grid;
+		padding: 10px 4px;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		text-align: center;
+	}
+	.tiles strong {
+		font-size: 1.25rem;
+		line-height: 1.3;
+		font-variant-numeric: tabular-nums;
+	}
+	.tiles span {
+		font-size: 0.8rem;
+	}
+	.folds {
+		margin-top: 10px;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+	}
+	details + details {
+		border-top: 1px solid var(--line);
+	}
+	summary {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		min-height: 48px;
+		padding: 0 12px 0 14px;
+		list-style: none;
+		cursor: pointer;
+	}
+	summary::-webkit-details-marker {
+		display: none;
+	}
+	summary :global(.icon) {
+		color: var(--muted);
+		transition: transform 0.15s;
+	}
+	details[open] > summary :global(.icon) {
+		transform: rotate(180deg);
+	}
+	.grow {
+		flex: 1;
+	}
+	.last {
+		margin: 8px 14px 12px;
+	}
 	.table-wrap {
 		overflow-x: auto;
+		margin: 0 14px;
+		padding-bottom: 6px;
+	}
+	tbody tr:last-child th,
+	tbody tr:last-child td {
+		border-bottom: none;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		summary :global(.icon) {
+			transition: none;
+		}
 	}
 	table {
 		width: 100%;
@@ -303,23 +421,18 @@
 		font-weight: 400;
 	}
 	.coverage {
-		margin: 10px 0;
-		font-size: 0.9rem;
-		color: var(--muted);
-	}
-	.coverage.partial {
+		margin: 10px 0 0;
 		padding: 6px 10px;
 		border: 1px solid var(--warn-border);
 		background: var(--warn-bg);
 		border-radius: 8px;
-		color: var(--text);
+		font-size: 0.9rem;
 	}
 	.note {
 		margin: 8px 0 0;
 	}
-	.badge.warn {
-		background: var(--warn-bg);
-		border: 1px solid var(--warn-border);
+	.retry {
+		margin-top: 10px;
 	}
 	.matches,
 	.candidates {
@@ -327,10 +440,13 @@
 		padding: 0;
 		margin: 0;
 	}
+	.matches {
+		margin: 0 14px;
+	}
 	.matches > li,
 	.candidates > li {
 		padding: 8px 0;
-		border-bottom: 1px solid var(--border);
+		border-bottom: 1px solid var(--line);
 	}
 	.match {
 		justify-content: space-between;

@@ -9,7 +9,7 @@
 
 <svelte:head><title>Edit {data.recipe.current.title} · Recipe Box</title></svelte:head>
 
-<h1>Edit <span class="badge">v{data.recipe.current.version_number}</span></h1>
+<h1>{data.recipe.current.title} <span class="badge">v{data.recipe.current.version_number}</span></h1>
 
 {#key data.recipe.current.id}
 	<RecipeChat
