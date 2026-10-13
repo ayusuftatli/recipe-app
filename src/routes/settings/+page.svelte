@@ -1,8 +1,17 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { clearOffline } from '$lib/offline';
 
 	let { data, form } = $props();
 	let confirming = $state<string | null>(null);
+
+	// Logging out also removes the recipes kept on this device for offline use.
+	async function logout(e: SubmitEvent) {
+		e.preventDefault();
+		const form = e.currentTarget as HTMLFormElement;
+		await clearOffline().catch(() => {});
+		form.submit();
+	}
 </script>
 
 <svelte:head><title>Settings · Recipe Box</title></svelte:head>
@@ -46,7 +55,7 @@
 {/if}
 
 <h2>Session</h2>
-<form method="POST" action="/logout">
+<form method="POST" action="/logout" onsubmit={logout}>
 	<button class="btn" type="submit">Log out</button>
 </form>
 

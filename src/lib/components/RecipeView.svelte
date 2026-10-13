@@ -12,6 +12,7 @@
 	} from '$lib/scaling';
 	import type { RecipeDraft } from '$lib/schema';
 	import { versionToDraft, type RecipeVersion } from '$lib/types';
+	import CookMode from './CookMode.svelte';
 	import ScaleControls from './ScaleControls.svelte';
 
 	let {
@@ -31,6 +32,7 @@
 	let anchorId = $state('');
 	let saving = $state(false);
 	let saveError = $state('');
+	let cooking = $state(false);
 
 	const request = $derived.by((): ScaleRequest | null => {
 		const amount = parseNumber(target);
@@ -91,6 +93,13 @@
 	/>
 {/if}
 
+{#if version.ingredients.length > 0 || version.steps.length > 0}
+	<button type="button" class="btn cook" onclick={() => (cooking = true)}>Start cooking</button>
+{/if}
+{#if cooking}
+	<CookMode title={version.title} {ingredients} steps={version.steps} onClose={() => (cooking = false)} />
+{/if}
+
 <h2>Ingredients</h2>
 {#if version.ingredients.length === 0}
 	<p class="muted">None.</p>
@@ -148,6 +157,10 @@
 <style>
 	.facts {
 		margin: 0;
+	}
+	.cook {
+		width: 100%;
+		margin-top: 12px;
 	}
 	.ingredients {
 		list-style: none;

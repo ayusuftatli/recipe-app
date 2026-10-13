@@ -90,6 +90,18 @@ export function allTags(): string[] {
 	return rows.map((r) => r.value);
 }
 
+function toDetail(row: { recipe: RecipeRow; version: VersionRow }): RecipeDetail {
+	return {
+		id: row.recipe.id,
+		tags: parseTags(row.recipe.tags),
+		photo_path: row.recipe.photoPath,
+		archived: row.recipe.archived,
+		created_at: row.recipe.createdAt,
+		updated_at: row.recipe.updatedAt,
+		current: toVersion(row.version)
+	};
+}
+
 function getRecipeRow(id: string): RecipeRow | undefined {
 	return db.select().from(recipes).where(eq(recipes.id, id)).get();
 }
@@ -101,16 +113,19 @@ export function getRecipe(id: string): RecipeDetail | null {
 		.innerJoin(recipeVersions, eq(recipeVersions.id, recipes.currentVersionId))
 		.where(eq(recipes.id, id))
 		.get();
-	if (!row) return null;
-	return {
-		id: row.recipe.id,
-		tags: parseTags(row.recipe.tags),
-		photo_path: row.recipe.photoPath,
-		archived: row.recipe.archived,
-		created_at: row.recipe.createdAt,
-		updated_at: row.recipe.updatedAt,
-		current: toVersion(row.version)
-	};
+	return row ? toDetail(row) : null;
+}
+
+/** Every non-archived recipe with its current version (the offline copy). */
+export function listCurrentRecipes(): RecipeDetail[] {
+	return db
+		.select({ recipe: recipes, version: recipeVersions })
+		.from(recipes)
+		.innerJoin(recipeVersions, eq(recipeVersions.id, recipes.currentVersionId))
+		.where(eq(recipes.archived, false))
+		.orderBy(desc(recipes.updatedAt))
+		.all()
+		.map(toDetail);
 }
 
 export function listVersions(recipeId: string): VersionMeta[] {

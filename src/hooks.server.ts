@@ -7,7 +7,8 @@ export const init: ServerInit = () => {
 	runMigrations();
 };
 
-const PUBLIC_PATHS = new Set(['/login', '/api/health']);
+// /offline is a static shell with no data in it; the recipes it shows come from the device.
+const PUBLIC_PATHS = new Set(['/login', '/api/health', '/offline']);
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const { pathname } = event.url;

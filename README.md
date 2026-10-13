@@ -3,7 +3,7 @@
 Single-user recipe app (SvelteKit + SQLite). See [SPEC.md](SPEC.md) for the
 full spec and milestones.
 
-**Status:** Milestones 1 (CRUD, versions, photos, auth), 2 (LLM import) and 3 (scaling) are implemented.
+**Status:** Milestones 1 (CRUD, versions, photos, auth), 2 (LLM import), 3 (scaling) and 4 (PWA, offline, cooking mode) are implemented.
 
 Adding and changing recipes happens mainly through the **assistant chat**:
 paste or type a recipe, send a link (the page's picture comes along), or
@@ -16,6 +16,13 @@ A recipe page can be **scaled** by servings, by total weight, by the amount
 of one ingredient you have, or shown as percentages of the total weight.
 Scaling only changes what is displayed unless you press "Save as new version".
 
+The app is an installable **PWA**. Every page opened while online refreshes a
+copy of all recipes (current versions and thumbnails) on the device; without a
+connection the app opens that copy read-only at `/offline`, with search and
+scaling. Logging out removes the copy. "Start cooking" on a recipe opens
+**cooking mode**: large text, an ingredient checklist, one step at a time, and
+the screen kept awake where the browser supports it.
+
 ## Local development
 
 ```sh
@@ -27,7 +34,7 @@ npm run dev              # migrations run automatically on start
 | Command | What it does |
 |---|---|
 | `npm run dev` | dev server |
-| `npm test` | Vitest unit tests (diff, form parsing, import helpers, LLM retry, scaling) |
+| `npm test` | Vitest unit tests (diff, form parsing, import helpers, LLM retry, scaling, offline search) |
 | `npm run check` | svelte-check / TypeScript |
 | `npm run build && npm start` | production build (adapter-node) |
 | `npm run db:generate` | create a migration after editing `src/lib/server/db/schema.ts` |
@@ -57,4 +64,9 @@ npm run dev              # migrations run automatically on start
 - `src/lib/diff.ts`, `src/lib/editor.ts`, `src/lib/scaling.ts` — pure logic with Vitest tests
 - `src/lib/server/llm.ts` — OpenRouter client and system prompt; the JSON
   schema sent to the model is generated from the Zod schema
+- `src/service-worker.ts` — caches the app shell and sends page loads to
+  `/offline` when the server can't be reached (only active in a production
+  build: `npm run build && npm start`)
+- `src/lib/offline.ts`, `src/lib/offline-view.ts` — the IndexedDB copy and its
+  search/filter logic
 - `src/routes/api/` — JSON API (validated with Zod); pages under `src/routes/`
