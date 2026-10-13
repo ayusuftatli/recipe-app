@@ -70,7 +70,7 @@ export function normalizeDraft(d: RecipeDraft): RecipeDraft {
 			grams: i.grams,
 			grams_estimated: i.grams_estimated,
 			optional: i.optional || undefined,
-			food_id: i.food_id ?? undefined
+			food_id: i.food_id
 		})),
 		steps: d.steps.map((s) => ({ id: s.id, text: s.text.trim(), group: clean(s.group) })),
 		notes: clean(d.notes),
@@ -103,17 +103,7 @@ export interface Food {
 	nutrients: Nutrients;
 }
 
-/** Response of POST /api/recipes/[id]/nutrition ("Calculate nutrition"). */
-export type MatchResponse =
-	| {
-			ok: true;
-			/** Ingredients newly matched in this run. */
-			matched: number;
-			/** Of those, how many were reused from earlier matches without any lookup. */
-			reused: number;
-			/** Ingredients no suitable food was found for. */
-			unmatched: number;
-			/** The version created for the new matches, if any. */
-			version_number: number | null;
-	  }
-	| { ok: false; error: string };
+/** Response of GET and POST /api/recipes/[id]/nutrition: is background matching running for this recipe? */
+export interface MatchStatus {
+	running: boolean;
+}

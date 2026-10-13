@@ -134,15 +134,15 @@ export function pickCandidate<T>(candidates: T[], answer: string | undefined): T
 }
 
 /**
- * A food match belongs to an ingredient name: when an edit renames an
- * ingredient but carries its old match along, the match is dropped.
+ * A food match (or the user's "no match") belongs to an ingredient name: when
+ * an edit renames an ingredient but carries the old choice along, it is dropped.
  */
 export function dropStaleFoodIds(previous: Ingredient[], next: Ingredient[]): Ingredient[] {
 	const prev = new Map(previous.map((i) => [i.id, i]));
 	return next.map((ing) => {
 		const before = prev.get(ing.id);
 		const renamed = before && normalizeName(before.name) !== normalizeName(ing.name);
-		if (!renamed || !ing.food_id || ing.food_id !== before.food_id) return ing;
+		if (!renamed || ing.food_id === undefined || ing.food_id !== before.food_id) return ing;
 		const { food_id: _, ...rest } = ing;
 		return rest;
 	});

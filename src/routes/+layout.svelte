@@ -92,12 +92,17 @@
 	nav {
 		display: flex;
 		align-items: center;
-		gap: 4px;
+		gap: 8px;
 	}
 	nav .icon-btn {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
+		width: 44px;
+		height: 44px;
+		font-size: 1.7rem;
+		line-height: 1;
+		color: var(--text);
 		text-decoration: none;
 	}
 </style>

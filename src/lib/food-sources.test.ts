@@ -111,6 +111,11 @@ describe('dropStaleFoodIds', () => {
 		const out = dropStaleFoodIds([ing('1', 'onion', 'f-onion')], [ing('1', 'garlic', 'f-onion')]);
 		expect(out).toEqual([ing('1', 'garlic')]);
 	});
+	it('drops a carried-over "no match" on rename, too', () => {
+		const none = (name: string): Ingredient => ({ ...ing('1', name), food_id: null });
+		expect(dropStaleFoodIds([none('onion')], [none('garlic')])).toEqual([ing('1', 'garlic')]);
+		expect(dropStaleFoodIds([none('onion')], [none('onion')])).toEqual([none('onion')]);
+	});
 	it('keeps matches when the name is the same, the match is new, or the ingredient is new', () => {
 		const prev = [ing('1', 'onion', 'f-onion')];
 		expect(dropStaleFoodIds(prev, [ing('1', ' Onion ', 'f-onion')])).toEqual([ing('1', ' Onion ', 'f-onion')]);

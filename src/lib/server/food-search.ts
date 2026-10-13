@@ -1,7 +1,8 @@
 import { env } from '$env/dynamic/private';
 import { parseFdcSearch, parseOffSearch, type FoodCandidate } from '$lib/food-sources';
 
-const MAX_CANDIDATES = 6;
+// Database search ranking is rough ("milk, whole" lists cheeses first), so offer a generous list.
+const MAX_CANDIDATES = 10;
 const TIMEOUT_MS = 15_000;
 
 async function getJson(url: URL, headers: Record<string, string>): Promise<unknown> {
@@ -25,7 +26,7 @@ async function searchFdc(query: string): Promise<FoodCandidate[]> {
 	const url = new URL('https://api.nal.usda.gov/fdc/v1/foods/search');
 	url.searchParams.set('query', query);
 	url.searchParams.set('dataType', 'Foundation,SR Legacy');
-	url.searchParams.set('pageSize', String(MAX_CANDIDATES * 2));
+	url.searchParams.set('pageSize', String(MAX_CANDIDATES * 2 + 5));
 	// The key travels in a header, not in the URL.
 	return parseFdcSearch(await getJson(url, { 'x-api-key': key }));
 }
@@ -62,5 +63,5 @@ export async function searchFoodsAny(queries: string[]): Promise<FoodCandidate[]
 			out.push(c);
 		}
 	}
-	return out.slice(0, MAX_CANDIDATES + 2);
+	return out.slice(0, MAX_CANDIDATES + 4);
 }

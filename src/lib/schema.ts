@@ -12,6 +12,7 @@ export const Ingredient = z.object({
 	grams: z.number().finite().nonnegative().nullable(),
 	grams_estimated: z.boolean(),
 	optional: z.boolean().optional(),
+	/** -> foods.id. Absent: not matched yet. null: the user chose "no match", so it is not matched automatically. */
 	food_id: z.string().nullable().optional()
 });
 export type Ingredient = z.infer<typeof Ingredient>;

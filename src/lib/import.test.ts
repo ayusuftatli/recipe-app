@@ -57,6 +57,23 @@ describe('finalizeDraft', () => {
 		expect(out.steps.map((s) => s.id)).toEqual(['step-keep', expect.stringMatching(UUID)]);
 	});
 
+	it('ignores a food_id the model made up and keeps a "no match" from the previous draft', () => {
+		const prev = draft({
+			ingredients: [{ id: 'keep', qty: 1, unit: 'piece', name: 'onion', grams: 150, grams_estimated: true, food_id: null }]
+		});
+		const out = finalizeDraft(
+			draft({
+				ingredients: [
+					{ id: 'keep', qty: 1, unit: 'piece', name: 'onion', grams: 150, grams_estimated: true, food_id: 'invented' },
+					{ id: 'new-1', qty: 1, unit: 'tsp', name: 'cumin', grams: 2, grams_estimated: true, food_id: null }
+				]
+			}),
+			prev
+		);
+		expect(out.ingredients[0]!.food_id).toBeNull();
+		expect('food_id' in out.ingredients[1]!).toBe(false);
+	});
+
 	it('uses exact grams for mass units and clears the estimate flag for null grams', () => {
 		const out = finalizeDraft(
 			draft({

@@ -23,13 +23,14 @@ scaling. Logging out removes the copy. "Start cooking" on a recipe opens
 **cooking mode**: large text, an ingredient checklist, one step at a time, and
 the screen kept awake where the browser supports it.
 
-**Nutrition** is calculated, never estimated by the LLM. "Calculate nutrition"
-on a recipe looks each ingredient up in USDA FoodData Central (falling back to
-Open Food Facts), lets the LLM pick the best candidate, and stores the chosen
-food. The recipe page then shows totals, per serving and per 100 g, with how
-many ingredients are covered. Ingredient names matched before are reused
-without any lookup, and every match can be changed by hand (search, or type in
-the values from a label).
+**Nutrition** is calculated, never estimated by the LLM. After a recipe is
+saved or opened, a background job looks each new ingredient up in USDA
+FoodData Central (falling back to Open Food Facts), lets the LLM pick the best
+candidate, and stores the chosen food. The recipe page shows totals, per
+serving and per 100 g, and lists every ingredient with its food, including the
+ones nothing was found for. Ingredient names matched before are reused without
+any lookup, and every match can be changed by hand (search, type in the values
+from a label, or "No match").
 
 ## Local development
 

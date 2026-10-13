@@ -1,6 +1,7 @@
 import { error, json } from '@sveltejs/kit';
 import { PatchRecipeRequest, SaveRecipeRequest } from '$lib/schema';
 import { readBody } from '$lib/server/http';
+import { queueMatch } from '$lib/server/nutrition';
 import { getRecipe, patchRecipe, saveRecipe } from '$lib/server/recipes';
 import type { RequestHandler } from './$types';
 
@@ -15,6 +16,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 	const body = await readBody(request, SaveRecipeRequest);
 	const result = saveRecipe(params.id, body.draft, body.tags, body.change_note);
 	if (!result) error(404, 'Recipe not found');
+	queueMatch(params.id);
 	return json(result);
 };
 

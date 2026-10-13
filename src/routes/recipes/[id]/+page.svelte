@@ -8,6 +8,11 @@
 
 	let { data } = $props();
 	const recipe = $derived(data.recipe);
+	// Changes only when amounts do, so a background nutrition match (new version, same amounts)
+	// doesn't reset the scaling controls or close cooking mode.
+	const amountsKey = $derived(
+		JSON.stringify([recipe.current.servings, recipe.current.yield_g, recipe.current.ingredients.map((i) => [i.id, i.qty, i.unit, i.grams])])
+	);
 
 	async function saveScaled(draft: RecipeDraft, changeNote: string) {
 		const res = await fetch(`/api/recipes/${recipe.id}`, {
@@ -38,10 +43,10 @@
 	{/each}
 </div>
 
-{#key recipe.current.id}
+{#key amountsKey}
 	<RecipeView version={recipe.current} scalable onSaveScaled={saveScaled} />
 {/key}
-<NutritionPanel recipeId={recipe.id} version={recipe.current} foods={data.foods} onChanged={invalidateAll} />
+<NutritionPanel recipeId={recipe.id} version={recipe.current} foods={data.foods} matching={data.matching} onChanged={invalidateAll} />
 
 <form method="POST" action={recipe.archived ? '?/unarchive' : '?/archive'} use:enhance class="archive-form">
 	<button class="btn small" type="submit">{recipe.archived ? 'Unarchive' : 'Archive'}</button>

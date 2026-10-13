@@ -3,18 +3,21 @@
 	import type { FoodCandidate } from '$lib/food-sources';
 	import { computeNutrition, formatNutrient, NUTRIENT_KEYS, NUTRIENT_LABELS, type NutrientKey } from '$lib/nutrition';
 	import type { Ingredient, Nutrients, SetFoodRequest } from '$lib/schema';
-	import type { Food, MatchResponse, RecipeVersion } from '$lib/types';
+	import type { Food, MatchStatus, RecipeVersion } from '$lib/types';
 
 	let {
 		recipeId,
 		version,
 		foods,
+		matching,
 		onChanged
 	}: {
 		recipeId: string;
 		version: RecipeVersion;
 		/** The foods this version's ingredients point at, by id. */
 		foods: Record<string, Food>;
+		/** Background matching was running for this recipe when the page data was loaded. */
+		matching: boolean;
 		/** Called after a new version was saved; should reload the page data. */
 		onChanged: () => Promise<void>;
 	} = $props();
@@ -26,7 +29,8 @@
 	const rows = $derived(NUTRIENT_KEYS.filter((k) => result.totals[k] !== undefined));
 	const counted = $derived(version.ingredients.filter((i) => !i.optional));
 	const noWeight = $derived(counted.filter((i) => i.grams === null).length);
-	const matchable = $derived(counted.filter((i) => i.grams !== null && !(i.food_id && foods[i.food_id])).length);
+	/** Not decided yet and able to contribute: what background matching still has to find. */
+	const open = $derived(counted.filter((i) => i.grams !== null && i.food_id === undefined).length);
 
 	const coverage = $derived(
 		`${result.matched} of ${result.counted} ingredients matched` +
@@ -34,30 +38,36 @@
 			(result.matched > 0 && result.matched < result.counted ? '. The values above leave the others out.' : '')
 	);
 
-	let busy = $state(false);
-	let message = $state('');
+	// Matching runs on the server in the background; poll until it is done, then reload.
+	let polling = $state(false);
 	let error = $state('');
+	$effect(() => {
+		polling = matching;
+	});
+	$effect(() => {
+		if (!polling) return;
+		const timer = setInterval(async () => {
+			try {
+				const res = await fetch(`/api/recipes/${recipeId}/nutrition`);
+				if (!res.ok || ((await res.json()) as MatchStatus).running) return;
+				polling = false;
+				await onChanged();
+			} catch {
+				// Offline or a hiccup: keep waiting.
+			}
+		}, 2000);
+		return () => clearInterval(timer);
+	});
 
-	async function calculate() {
-		busy = true;
-		message = '';
+	async function retry() {
 		error = '';
 		try {
 			const res = await fetch(`/api/recipes/${recipeId}/nutrition`, { method: 'POST' });
-			const data = (await res.json().catch(() => null)) as (MatchResponse & { message?: string }) | null;
+			const data = (await res.json().catch(() => null)) as (MatchStatus & { message?: string }) | null;
 			if (!res.ok || !data) error = data?.message ?? `Request failed (${res.status})`;
-			else if (!data.ok) error = data.error;
-			else {
-				const parts = [`Matched ${data.matched} ingredient${data.matched === 1 ? '' : 's'}`];
-				if (data.reused) parts.push(`${data.reused} from earlier matches`);
-				if (data.unmatched) parts.push(`${data.unmatched} not found`);
-				message = `${parts.join(', ')}.`;
-				if (data.version_number !== null) await onChanged();
-			}
+			else polling = data.running;
 		} catch {
 			error = 'Network error. Are you online?';
-		} finally {
-			busy = false;
 		}
 	}
 
@@ -86,6 +96,8 @@
 		byHand = false;
 		hand = { ...emptyHand(), name: ing.name };
 		editError = '';
+		// Show the alternatives straight away.
+		void search();
 	}
 
 	async function search() {
@@ -114,7 +126,6 @@
 			});
 			if (!res.ok) throw new Error(`Save failed (${res.status})`);
 			editing = null;
-			message = '';
 			await onChanged();
 		} catch (e) {
 			editError = e instanceof Error ? e.message : 'Save failed';
@@ -167,8 +178,8 @@
 			</tbody>
 		</table>
 	</div>
-{:else}
-	<p class="muted">Not calculated yet.</p>
+{:else if !polling}
+	<p class="muted">{counted.length > 0 ? 'No ingredient is matched to a food yet.' : 'No ingredients.'}</p>
 {/if}
 
 {#if counted.length > 0}
@@ -177,32 +188,34 @@
 	</p>
 {/if}
 
-{#if matchable > 0}
-	<button type="button" class="btn" disabled={busy} onclick={calculate}>
-		{busy ? 'Matching ingredients…' : result.matched > 0 ? 'Match the remaining ingredients' : 'Calculate nutrition'}
-	</button>
+{#if polling}
+	<p class="muted note" role="status">Matching ingredients in the background…</p>
+{:else if open > 0}
+	<button type="button" class="btn small" onclick={retry}>Try matching again</button>
 {/if}
-{#if message}<p class="muted note">{message}</p>{/if}
 {#if error}<p class="error note">{error}</p>{/if}
 
-{#if counted.length > 0}
-	<details>
-		<summary>Matched foods</summary>
-		<ul class="matches">
-			{#each counted as ing (ing.id)}
+{#if version.ingredients.length > 0}
+	<h3>Foods used</h3>
+	<ul class="matches">
+			{#each version.ingredients as ing (ing.id)}
 				{@const food = ing.food_id ? foods[ing.food_id] : undefined}
 				<li>
 					<div class="row match">
 						<div class="who">
 							<div class="name">{ing.name}</div>
-							{#if food}
+							{#if ing.optional}
+								<div class="muted food">optional, not counted</div>
+							{:else if food}
 								<div class="muted food">{food.name} · {SOURCES[food.source]} · {formatNutrient('kcal', food.nutrients.kcal)} kcal/100 g</div>
 							{:else}
-								<div class="muted food">no match</div>
+								<div class="food"><span class="badge warn">not matched</span>{ing.food_id === null ? ' (your choice)' : ''}</div>
 							{/if}
-							{#if ing.grams === null}<div class="muted food">no weight, so it adds nothing</div>{/if}
+							{#if ing.grams === null && !ing.optional}<div class="muted food">no weight, so it adds nothing</div>{/if}
 						</div>
-						<button type="button" class="btn small" onclick={() => startEdit(ing)}>{editing === ing.id ? 'Close' : 'Change'}</button>
+						{#if !ing.optional}
+							<button type="button" class="btn small" onclick={() => startEdit(ing)}>{editing === ing.id ? 'Close' : 'Change'}</button>
+						{/if}
 					</div>
 
 					{#if editing === ing.id}
@@ -237,8 +250,8 @@
 
 							<div class="row options">
 								<button type="button" class="btn small" onclick={() => (byHand = !byHand)}>{byHand ? 'Hide' : 'Enter values by hand'}</button>
-								{#if food}
-									<button type="button" class="btn small" disabled={saving} onclick={() => setFood(ing.id, null)}>Remove match</button>
+								{#if ing.food_id !== null}
+									<button type="button" class="btn small" disabled={saving} onclick={() => setFood(ing.id, null)}>No match</button>
 								{/if}
 							</div>
 							{#if byHand}
@@ -256,9 +269,8 @@
 					{/if}
 				</li>
 			{/each}
-		</ul>
-		<p class="muted food">Changing a match saves a new version of the recipe. Optional ingredients are not counted.</p>
-	</details>
+	</ul>
+	<p class="muted food">Changing a match saves a new version of the recipe.</p>
 {/if}
 
 <style>
@@ -305,12 +317,9 @@
 	.note {
 		margin: 8px 0 0;
 	}
-	details {
-		margin-top: 12px;
-	}
-	summary {
-		cursor: pointer;
-		padding: 6px 0;
+	.badge.warn {
+		background: var(--warn-bg);
+		border: 1px solid var(--warn-border);
 	}
 	.matches,
 	.candidates {

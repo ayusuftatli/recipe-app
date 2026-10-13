@@ -21,7 +21,7 @@ export function parseModelJson(text: string): unknown {
  * Makes LLM output safe to store:
  * - ids: kept only when they match an item of the previous draft (so the
  *   version diff can match them); everything else gets a fresh uuid
- * - food_id carried over from the previous draft when the model dropped it
+ * - food_id always taken from the previous draft's item, never from the model
  * - mass units (g/kg/mg) get exact grams, never an estimate
  */
 export function finalizeDraft(draft: RecipeDraft, previous: RecipeDraft | null = null): RecipeDraft {
@@ -44,9 +44,9 @@ export function finalizeDraft(draft: RecipeDraft, previous: RecipeDraft | null =
 			const id = keepId(ing.id, prev !== undefined);
 			const exact = exactGrams(ing.qty, ing.unit ?? '');
 			const grams = exact ?? ing.grams;
-			const food_id = ing.food_id ?? (id === prev?.id ? prev.food_id : undefined);
+			const food_id = id === prev?.id ? prev.food_id : undefined;
 			const out = { ...ing, id, grams, grams_estimated: exact !== null || grams === null ? false : ing.grams_estimated };
-			if (food_id) out.food_id = food_id;
+			if (food_id !== undefined) out.food_id = food_id;
 			else delete out.food_id;
 			return out;
 		}),

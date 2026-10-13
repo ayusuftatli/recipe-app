@@ -139,7 +139,7 @@ const SEARCH_TERMS_FORMAT = responseFormat('food_search_terms', SearchTerms);
 
 const SEARCH_TERMS_PROMPT = `You prepare search queries for a food composition database (USDA FoodData Central, English only).
 
-For each recipe ingredient, write one or two short English queries likely to find the plain, generic food: translate to English, drop brands, quantities and preparation, and add the state when it matters (e.g. "raw", "dry", "cooked", "canned"). Put the most specific query first; add a second one when the database may file the food under a broader or different name. Examples: "Tellerlinsen" -> ["lentils, raw"]; "2 large eggs" -> ["egg, whole, raw"]; "red onion, finely chopped" -> ["onions, red, raw", "onions, raw"]; "spaghetti" -> ["spaghetti, dry", "pasta, dry"]; "olive oil" -> ["oil, olive"]; "plain flour" -> ["wheat flour, white, all-purpose"].
+For each recipe ingredient, write one or two short English queries likely to find the plain, generic food: translate to English, drop brands, quantities and preparation, and add the state when it matters (e.g. "raw", "dry", "cooked", "canned"). Put the most specific query first; add a second, broader one whenever the ingredient is a particular variety, cut or regional name, or the database may file it under a different name. Examples: "Tellerlinsen" -> ["lentils, raw"]; "2 large eggs" -> ["egg, whole, raw"]; "red onion, finely chopped" -> ["onions, red, raw", "onions, raw"]; "spaghetti" -> ["spaghetti, dry", "pasta, dry"]; "basmati rice" -> ["rice, basmati, raw", "rice, white, long-grain, raw"]; "olive oil" -> ["oil, olive"]; "plain flour" -> ["wheat flour, white, all-purpose"].
 
 Answer with one JSON object: {"terms": [{"id": the ingredient's id, "queries": [string, ...]}]}, one entry per ingredient.`;
 
@@ -171,7 +171,9 @@ const FOOD_CHOICES_FORMAT = responseFormat('food_choices', FoodChoices);
 
 const FOOD_CHOICES_PROMPT = `You match recipe ingredients to entries of a food database so that nutrition can be calculated.
 
-Each ingredient comes with numbered candidates. Pick the candidate that best represents the ingredient as it goes into the recipe: prefer the plain, generic, raw or uncooked form unless the ingredient says otherwise, and avoid branded or prepared products when a generic entry exists. If no candidate is a reasonable match, answer "none"; a wrong match is worse than none.
+Each ingredient comes with numbered candidates. Pick the candidate that best represents the ingredient as it goes into the recipe: prefer the plain, generic, raw or uncooked form unless the ingredient says otherwise, and avoid branded or prepared products when a generic entry exists.
+
+The exact variety is often not in the database. Then pick the closest equivalent of the same kind of food, whose nutrition is about the same: basmati rice -> white long-grain rice, raw; red onion -> onions, raw; minced beef -> ground beef, raw; any dried pasta shape -> pasta, dry. Answer "none" only when no candidate is the same kind of food (a different food, or a cooked or prepared dish for a raw ingredient); a wrong food is worse than none.
 
 Answer with one JSON object: {"choices": [{"id": the ingredient's id, "candidate": the candidate's number as a string, or "none"}]}, one entry per ingredient. Do not output anything else, and never output nutrition values.`;
 

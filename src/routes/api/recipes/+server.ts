@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { SaveRecipeRequest } from '$lib/schema';
 import { readBody } from '$lib/server/http';
+import { queueMatch } from '$lib/server/nutrition';
 import { createRecipe, listRecipes } from '$lib/server/recipes';
 import type { RequestHandler } from './$types';
 
@@ -17,5 +18,6 @@ export const GET: RequestHandler = ({ url }) => {
 export const POST: RequestHandler = async ({ request }) => {
 	const body = await readBody(request, SaveRecipeRequest);
 	const id = createRecipe(body.draft, body.tags, body.change_note);
+	queueMatch(id);
 	return json({ id, version_number: 1 }, { status: 201 });
 };

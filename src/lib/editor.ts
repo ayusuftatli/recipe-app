@@ -19,7 +19,8 @@ export type IngredientRow = {
 	grams: string;
 	grams_estimated: boolean;
 	optional: boolean;
-	food_id: string | null;
+	/** Carried through untouched; see Ingredient.food_id. */
+	food_id: string | null | undefined;
 };
 
 export type StepRow = { kind: 'item'; key: string; id: string; text: string };
@@ -67,7 +68,7 @@ export function newIngredientRow(): IngredientRow {
 		grams: '',
 		grams_estimated: false,
 		optional: false,
-		food_id: null
+		food_id: undefined
 	};
 }
 
@@ -105,7 +106,7 @@ export function ingredientsToRows(ingredients: Ingredient[]): IngredientEditorRo
 		grams: numToString(i.grams),
 		grams_estimated: i.grams_estimated,
 		optional: i.optional ?? false,
-		food_id: i.food_id ?? null
+		food_id: i.food_id
 	}));
 }
 
@@ -149,7 +150,7 @@ export function rowsToIngredients(rows: IngredientEditorRow[]): { ingredients: I
 		if (group) ing.group = group;
 		if (row.note.trim()) ing.note = row.note.trim();
 		if (row.optional) ing.optional = true;
-		if (row.food_id) ing.food_id = row.food_id;
+		if (row.food_id !== undefined) ing.food_id = row.food_id;
 		ingredients.push(ing);
 	}
 	return { ingredients, errors };
