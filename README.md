@@ -3,7 +3,8 @@
 Single-user recipe app (SvelteKit + SQLite). See [SPEC.md](SPEC.md) for the
 full spec and milestones.
 
-**Status:** Milestones 1 (CRUD, versions, photos, auth), 2 (LLM import), 3 (scaling), 4 (PWA, offline, cooking mode) and 5 (nutrition) are implemented.
+**Status:** Milestones 1 (CRUD, versions, photos, auth), 2 (LLM import), 3 (scaling), 4 (PWA, offline, cooking mode), 5 (nutrition) and 6 (backup) are
+implemented: every milestone of the spec.
 
 Adding and changing recipes happens mainly through the **assistant chat**:
 paste or type a recipe, send a link (the page's picture comes along), or
@@ -32,6 +33,14 @@ ones nothing was found for. Ingredient names matched before are reused without
 any lookup, and every match can be changed by hand (search, type in the values
 from a label, or "No match").
 
+**Backup** lives on the settings page: download everything as JSON
+(`GET /api/export`: all recipes, versions and foods) or as the SQLite file
+(`GET /api/export/db`), and restore a JSON backup (`POST /api/import`). A
+restore into a database that already has data is refused unless you confirm
+replacing everything (`?force=true`). Photos are files on the volume and are
+not part of either backup; a restore keeps a recipe's photo only if the file
+is still there.
+
 ## Local development
 
 ```sh
@@ -43,7 +52,7 @@ npm run dev              # migrations run automatically on start
 | Command | What it does |
 |---|---|
 | `npm run dev` | dev server |
-| `npm test` | Vitest unit tests (diff, form parsing, import helpers, LLM retry, scaling, offline search, nutrition) |
+| `npm test` | Vitest unit tests (diff, form parsing, import helpers, LLM retry, scaling, offline search, nutrition, backup format) |
 | `npm run check` | svelte-check / TypeScript |
 | `npm run build && npm start` | production build (adapter-node) |
 | `npm run db:generate` | create a migration after editing `src/lib/server/db/schema.ts` |

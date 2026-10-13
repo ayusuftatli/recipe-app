@@ -1,4 +1,5 @@
 import sharp from 'sharp';
+import { existsSync } from 'node:fs';
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { env } from '$env/dynamic/private';
@@ -38,6 +39,10 @@ export async function readPhoto(name: string, size: 'full' | 'thumb'): Promise<B
 	} catch {
 		return null;
 	}
+}
+
+export function photoExists(name: string): boolean {
+	return isPhotoName(name) && existsSync(join(photoDir(), `${name}.webp`));
 }
 
 export async function deletePhoto(name: string | null): Promise<void> {
