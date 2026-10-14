@@ -4,6 +4,7 @@
 	import { afterNavigate, beforeNavigate } from '$app/navigation';
 	import { page } from '$app/state';
 	import Icon from '$lib/components/Icon.svelte';
+	import TabBar from '$lib/components/TabBar.svelte';
 	import { syncOffline } from '$lib/offline';
 	import { OFFLINE_PATH, offlineHref } from '$lib/offline-view';
 
@@ -11,6 +12,13 @@
 
 	const path = $derived(page.url.pathname);
 	const offlinePage = $derived(path === OFFLINE_PATH);
+	/** The top-level pages share a tab bar at the bottom of the screen. */
+	const TABS = [
+		{ route: '/', href: '/', label: 'Recipes', icon: 'book' },
+		{ route: '/plan', href: '/plan', label: 'Plan', icon: 'calendar' },
+		{ route: '/groceries', href: '/groceries', label: 'Groceries', icon: 'cart' }
+	] as const;
+	const tabbed = $derived(!page.error && TABS.some((t) => t.route === page.route.id));
 	let online = $state(true);
 
 	const recipeHref = $derived(`/recipes/${page.params.id}`);
@@ -39,11 +47,16 @@
 
 	onMount(() => {
 		const update = () => (online = navigator.onLine);
+		// Back in range: send the grocery ticks made meanwhile and refresh the copy on this device.
+		const reconnected = () => {
+			update();
+			if (path !== '/login') syncOffline().catch(() => {});
+		};
 		update();
-		window.addEventListener('online', update);
+		window.addEventListener('online', reconnected);
 		window.addEventListener('offline', update);
 		return () => {
-			window.removeEventListener('online', update);
+			window.removeEventListener('online', reconnected);
 			window.removeEventListener('offline', update);
 		};
 	});
@@ -76,7 +89,8 @@
 			<a class="icon-btn" href={sub.back} aria-label={sub.backLabel} onclick={goBack}><Icon name="back" size={24} /></a>
 			<span class="where">{sub.label}</span>
 		{:else}
-			<a class="brand" href={offlinePage ? OFFLINE_PATH : '/'}>Recipe Box</a>
+			<!-- Offline, the views live in the hash of one page: an empty hash is its recipe list. -->
+			<a class="brand" href={offlinePage ? '#' : '/'}>Recipe Box</a>
 		{/if}
 		{#if !offlinePage}
 			<nav>
@@ -103,6 +117,10 @@
 <main>
 	{@render children()}
 </main>
+
+{#if tabbed}
+	<TabBar tabs={TABS.map((t) => ({ ...t, current: page.route.id === t.route }))} />
+{/if}
 
 <style>
 	header {
@@ -145,7 +163,7 @@
 	header .icon-btn {
 		color: var(--text);
 	}
-	nav {
+	header nav {
 		display: flex;
 		align-items: center;
 		gap: 8px;

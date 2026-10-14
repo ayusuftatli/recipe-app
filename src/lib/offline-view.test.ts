@@ -64,6 +64,10 @@ describe('offlineHref', () => {
 		expect(offlineHref('/recipes/abc-123')).toBe('/offline#abc-123');
 		expect(offlineHref('/recipes/abc-123/history')).toBe('/offline#abc-123');
 	});
+	it('keeps the plan and the grocery list', () => {
+		expect(offlineHref('/plan')).toBe('/offline#plan');
+		expect(offlineHref('/groceries')).toBe('/offline#groceries');
+	});
 	it('sends everything else to the list', () => {
 		for (const p of ['/', '/settings', '/recipes/new', '/recipes']) expect(offlineHref(p)).toBe('/offline');
 	});

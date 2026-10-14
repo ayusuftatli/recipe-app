@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Ingredient, RecipeDraft } from './schema';
-import { percentages, roundGrams, roundQty, scaleDraft, scaleFactor, scaleIngredients, totalGrams } from './scaling';
+import { percentages, roundGrams, roundQty, scaleDraft, scaleFactor, scaleIngredients, stepServings, totalGrams } from './scaling';
 
 function ing(id: string, over: Partial<Ingredient> = {}): Ingredient {
 	return { id, qty: 1, unit: 'g', name: id, grams: 1, grams_estimated: false, ...over };
@@ -70,6 +70,25 @@ describe('scaleFactor', () => {
 			expect(scaleFactor(recipe, { mode: 'weight', target: bad })).toBeNull();
 			expect(scaleFactor(recipe, { mode: 'anchor', ingredientId: 'flour', available: bad })).toBeNull();
 		}
+	});
+});
+
+describe('stepServings', () => {
+	it('moves by one from a whole number', () => {
+		expect(stepServings(4, 1)).toBe(5);
+		expect(stepServings(4, -1)).toBe(3);
+	});
+	it('goes to the nearest whole number from a fraction', () => {
+		expect(stepServings(2.5, 1)).toBe(3);
+		expect(stepServings(2.5, -1)).toBe(2);
+		// 3 servings that came out of a division as 2.9999999999
+		expect(stepServings(2.9999999999, 1)).toBe(4);
+		expect(stepServings(3.0000000001, -1)).toBe(2);
+	});
+	it('does not go below one serving', () => {
+		expect(stepServings(1, -1)).toBeNull();
+		expect(stepServings(0.5, -1)).toBeNull();
+		expect(stepServings(0.5, 1)).toBe(1);
 	});
 });
 

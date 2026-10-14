@@ -49,6 +49,12 @@ export function scaleFactor(
 	return Math.abs(factor - 1) < 1e-6 ? 1 : factor;
 }
 
+/** The next whole number of servings up or down from whatever is shown (2.5 → 3 or 2); null below one serving. */
+export function stepServings(servings: number, delta: 1 | -1): number | null {
+	const next = delta > 0 ? Math.floor(servings + 1e-9) + 1 : Math.ceil(servings - 1e-9) - 1;
+	return next < 1 ? null : next;
+}
+
 function roundToStep(value: number, step: number): number {
 	return Math.round(Math.round(value / step) * step * 1000) / 1000;
 }

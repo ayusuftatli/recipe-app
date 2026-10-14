@@ -7,6 +7,7 @@
 		scaleDraft,
 		scaleFactor,
 		scaleIngredients,
+		stepServings as nextServings,
 		type ScaleMode,
 		type ScaleRequest
 	} from '$lib/scaling';
@@ -15,12 +16,14 @@
 	import CookMode from './CookMode.svelte';
 	import Icon from './Icon.svelte';
 	import ScaleControls from './ScaleControls.svelte';
+	import ServingsStepper from './ServingsStepper.svelte';
 
 	let {
 		version,
 		scalable = false,
 		pinCook = false,
-		onSaveScaled
+		onSaveScaled,
+		onPlan
 	}: {
 		version: RecipeVersion;
 		/** Shows the scaling controls. Scaling only changes what is displayed. */
@@ -29,6 +32,8 @@
 		pinCook?: boolean;
 		/** Enables "Save as new version" for a scaled recipe; should throw on failure. */
 		onSaveScaled?: (draft: RecipeDraft, changeNote: string) => Promise<void>;
+		/** Shows "Add to plan" in the pinned bar. Gets the servings on screen, or null when the recipe is shown as written. */
+		onPlan?: (servings: number | null) => void;
 	} = $props();
 
 	let mode = $state<ScaleMode>('off');
@@ -67,8 +72,8 @@
 	/** Moves to the next whole number of servings from whatever is shown. */
 	function stepServings(delta: 1 | -1) {
 		if (servings === null) return;
-		const next = delta > 0 ? Math.floor(servings + 1e-9) + 1 : Math.ceil(servings - 1e-9) - 1;
-		if (next < 1) return;
+		const next = nextServings(servings, delta);
+		if (next === null) return;
 		if (next === version.servings) {
 			mode = 'off';
 			return;
@@ -121,15 +126,7 @@
 <div class="section-head">
 	<h2>Ingredients</h2>
 	{#if hasStepper && servings !== null}
-		<div class="stepper" role="group" aria-label="Servings">
-			<button type="button" class="round" aria-label="Fewer servings" disabled={servings <= 1} onclick={() => stepServings(-1)}>
-				<Icon name="minus" />
-			</button>
-			<span class="servings" aria-live="polite">{formatQty(servings)} {servings === 1 ? 'serving' : 'servings'}</span>
-			<button type="button" class="round" aria-label="More servings" onclick={() => stepServings(1)}>
-				<Icon name="plus" />
-			</button>
-		</div>
+		<ServingsStepper {servings} onStep={stepServings} />
 	{/if}
 </div>
 
@@ -203,9 +200,16 @@
 	</p>
 {/if}
 
-{#if cookable && pinCook}
-	<div class="action-bar single">
-		<button type="button" class="btn primary" onclick={() => (cooking = true)}><Icon name="play" size={18} /> Start cooking</button>
+{#if pinCook && (cookable || onPlan)}
+	<div class="action-bar" class:single={!cookable || !onPlan}>
+		{#if onPlan}
+			<button type="button" class="btn" onclick={() => onPlan(scaled && servings !== null ? Math.round(servings * 100) / 100 : null)}>
+				<Icon name="calendar" size={18} /> Add to plan
+			</button>
+		{/if}
+		{#if cookable}
+			<button type="button" class="btn primary" onclick={() => (cooking = true)}><Icon name="play" size={18} /> Start cooking</button>
+		{/if}
 	</div>
 {/if}
 
@@ -216,35 +220,6 @@
 	.cook {
 		width: 100%;
 		margin-top: 12px;
-	}
-	.stepper {
-		display: flex;
-		align-items: center;
-		gap: 4px;
-	}
-	.round {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 44px;
-		height: 44px;
-		padding: 0;
-		border: 1px solid var(--border);
-		border-radius: 999px;
-		background: var(--surface);
-		cursor: pointer;
-	}
-	.round:disabled {
-		opacity: 0.4;
-		cursor: default;
-	}
-	.servings {
-		min-width: 6.5ch;
-		padding: 0 4px;
-		text-align: center;
-		font-weight: 600;
-		font-variant-numeric: tabular-nums;
-		white-space: nowrap;
 	}
 	.ingredients {
 		list-style: none;

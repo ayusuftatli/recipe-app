@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { env } from '$env/dynamic/private';
+import { AISLE_LABELS, AISLES, termsFromAnswer, type GroceryTerm } from '$lib/grocery';
 import { AssistantReply, type RecipeDraft } from '$lib/schema';
 import { completeStructured, type ChatMessage, type Complete, type ContentPart } from '$lib/llm-structured';
 
@@ -197,4 +198,45 @@ export async function chooseFoods(
 	);
 	if (!result.ok) throw new LlmError('The assistant could not choose between the food candidates.');
 	return new Map(result.data.choices.map((c) => [c.id, c.candidate]));
+}
+
+// ---- Grocery list (spec 4.11). The model names and sorts; it never sees or returns amounts. ----
+
+const GroceryTerms = z.object({ items: z.array(z.object({ id: z.string(), name: z.string(), aisle: z.enum(AISLES) })) });
+const GROCERY_TERMS_FORMAT = responseFormat('grocery_terms', GroceryTerms);
+
+const GROCERY_TERMS_PROMPT = `You tidy ingredient names for a shopping list.
+
+For each numbered ingredient name, give:
+- "name": what to write on the shopping list. The product itself, singular where that is natural, lower case, in the language the ingredient is written in, without quantities, preparation or notes ("Onions, finely diced" -> "onion"; "2 large eggs" -> "egg").
+- "aisle": the section of the shop it is found in, one of:
+${AISLES.map((a) => `  "${a}": ${AISLE_LABELS[a]}`).join('\n')}
+  Use "other" only when none fits.
+
+Two ingredients get the same "name" only when they are the same product on the shelf: differences in spelling, plural, upper and lower case, or preparation. Different products stay different, however similar: red onion and onion, spaghetti and penne, coconut milk and milk, smoked paprika and paprika, brown rice and basmati rice.
+
+"existing" lists names already on the list. When an ingredient is the same product as one of them, use that name exactly as it is written there.
+
+Answer with one JSON object: {"items": [{"id": the ingredient's number as a string, "name": string, "aisle": string}]}, one entry per ingredient. Do not output anything else.`;
+
+/**
+ * Shopping name and shop section for ingredient names. `existing` are the
+ * shopping names already in use, so that the same product gets the same name.
+ * Names the model skips or answers unusably are simply absent.
+ */
+export async function groceryTerms(
+	names: string[],
+	existing: string[],
+	complete: Complete = openRouterComplete(GROCERY_TERMS_FORMAT)
+): Promise<GroceryTerm[]> {
+	const result = await completeStructured(
+		complete,
+		[
+			{ role: 'system', content: GROCERY_TERMS_PROMPT },
+			{ role: 'user', content: JSON.stringify({ ingredients: names.map((name, i) => ({ id: String(i + 1), name })), existing }) }
+		],
+		GroceryTerms
+	);
+	if (!result.ok) throw new LlmError('The assistant could not tidy the grocery list.');
+	return termsFromAnswer(names, result.data.items);
 }

@@ -24,8 +24,18 @@ export function tagsOf(recipes: RecipeDetail[]): string[] {
 
 export const OFFLINE_PATH = '/offline';
 
-/** Where a page of the online app lives in the offline copy: recipe pages keep their recipe, the rest go to the list. */
+/** The views of the offline page besides the recipe list and a recipe (whose hash is its id). */
+export const OFFLINE_PLAN = 'plan';
+export const OFFLINE_GROCERIES = 'groceries';
+
+/**
+ * Where a page of the online app lives in the offline copy: recipe pages keep
+ * their recipe, the plan and the grocery list have their own view, the rest
+ * go to the recipe list.
+ */
 export function offlineHref(pathname: string): string {
+	if (pathname === '/plan') return `${OFFLINE_PATH}#${OFFLINE_PLAN}`;
+	if (pathname === '/groceries') return `${OFFLINE_PATH}#${OFFLINE_GROCERIES}`;
 	const id = /^\/recipes\/([^/]+)/.exec(pathname)?.[1];
 	return id && id !== 'new' ? `${OFFLINE_PATH}#${id}` : OFFLINE_PATH;
 }

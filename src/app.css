@@ -82,7 +82,11 @@ h3 {
 main {
 	max-width: 760px;
 	margin: 0 auto;
-	padding: 0 16px 96px;
+	padding: 0 16px calc(96px + var(--tabbar, 0px));
+}
+/* Pages showing the tab bar (TabBar.svelte) keep clear of it. */
+body:has(.tabbar) main {
+	--tabbar: 58px;
 }
 
 input,

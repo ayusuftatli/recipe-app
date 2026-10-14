@@ -19,7 +19,7 @@ function file(): ExportFile {
 	});
 	return {
 		format: 'recipe-box-export',
-		version: 1,
+		version: 2,
 		exported_at: at,
 		recipes: [
 			{ id: 'r1', current_version_id: 'v2', tags: ['soup'], photo_path: null, archived: false, created_at: at, updated_at: at },
@@ -30,7 +30,14 @@ function file(): ExportFile {
 			{ id: 'f1', name: 'Onions, raw', source: 'usda', source_id: '170000', nutrients: { kcal: 40, protein_g: 1.1, fat_g: 0.1, carbs_g: 9.3 }, created_at: at },
 			{ id: 'f2', name: 'Label', source: 'manual', source_id: null, nutrients: { kcal: 1, protein_g: 0, fat_g: 0, carbs_g: 0 }, created_at: at },
 			{ id: 'f3', name: 'Label 2', source: 'manual', source_id: null, nutrients: { kcal: 1, protein_g: 0, fat_g: 0, carbs_g: 0 }, created_at: at }
-		]
+		],
+		plan: [
+			{ id: 'p1', date: '2026-01-05', recipe_id: 'r1', servings: 4, position: 0, shopped: false, created_at: at },
+			{ id: 'p2', date: '2026-01-05', recipe_id: 'r2', servings: null, position: 1, shopped: true, created_at: at }
+		],
+		grocery_manual: [{ id: 'm1', name: 'Bin bags', created_at: at }],
+		staples: [{ key: 'salt', name: 'Salt', needed: false, created_at: at }],
+		grocery_terms: [{ name_key: 'onions', canonical: 'onion', aisle: 'produce', source: 'llm', created_at: at }]
 	};
 }
 
@@ -42,17 +49,32 @@ describe('ExportFile', () => {
 	it('rejects other files and broken rows', () => {
 		expect(ExportFile.safeParse({}).success).toBe(false);
 		expect(ExportFile.safeParse({ ...file(), format: 'something-else' }).success).toBe(false);
-		expect(ExportFile.safeParse({ ...file(), version: 2 }).success).toBe(false);
+		expect(ExportFile.safeParse({ ...file(), version: 3 }).success).toBe(false);
+		const badDay = file();
+		badDay.plan[0]!.date = '2026-02-30';
+		expect(ExportFile.safeParse(badDay).success).toBe(false);
 		const bad = file();
 		(bad.versions[0]!.ingredients[0] as { name: unknown }).name = 5;
 		expect(ExportFile.safeParse(bad).success).toBe(false);
 	});
 });
 
+describe('ExportFile version 1', () => {
+	it('is still read, with an empty plan', () => {
+		const { plan: _p, grocery_manual: _m, staples: _s, grocery_terms: _t, ...v1 } = { ...file(), version: 1 };
+		const parsed = ExportFile.parse(v1);
+		expect(parsed.plan).toEqual([]);
+		expect(parsed.grocery_manual).toEqual([]);
+		expect(parsed.staples).toEqual([]);
+		expect(parsed.grocery_terms).toEqual([]);
+		expect(parsed.recipes).toHaveLength(2);
+	});
+});
+
 describe('checkExport', () => {
 	it('finds nothing wrong with a consistent backup', () => {
 		expect(checkExport(file())).toEqual([]);
-		expect(checkExport({ ...file(), recipes: [], versions: [], foods: [] })).toEqual([]);
+		expect(checkExport({ ...file(), recipes: [], versions: [], foods: [], plan: [], grocery_manual: [], staples: [], grocery_terms: [] })).toEqual([]);
 	});
 	it('reports a recipe whose current version is missing or belongs to another recipe', () => {
 		const missing = file();
@@ -65,7 +87,20 @@ describe('checkExport', () => {
 	it('reports versions without their recipe', () => {
 		const f = file();
 		f.recipes.pop();
-		expect(checkExport(f)).toEqual(['Version v3 belongs to a recipe that is not in the file']);
+		expect(checkExport(f)).toEqual(['Version v3 belongs to a recipe that is not in the file', 'Plan entry p2 is for a recipe that is not in the file']);
+	});
+	it('reports duplicate plan entries, grocery items, staples and shopping names', () => {
+		const f = file();
+		f.plan.push({ ...f.plan[0]! });
+		f.grocery_manual.push({ ...f.grocery_manual[0]! });
+		f.staples.push({ ...f.staples[0]! });
+		f.grocery_terms.push({ ...f.grocery_terms[0]! });
+		expect(checkExport(f)).toEqual([
+			'Duplicate plan entry id: p1',
+			'Duplicate grocery item id: m1',
+			'Duplicate staple: salt',
+			'Duplicate shopping name: onions'
+		]);
 	});
 	it('reports duplicate ids, version numbers and food sources', () => {
 		const f = file();

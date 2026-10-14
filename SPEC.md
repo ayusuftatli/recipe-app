@@ -83,6 +83,39 @@ foods                                       -- nutrition cache, shared across re
   nutrients_per_100g  TEXT NOT NULL         -- JSON, see Nutrients schema
   created_at          TEXT NOT NULL
   UNIQUE (source, source_id)
+
+plan_entries                                -- the meal plan: one recipe on one day
+  id                  TEXT PRIMARY KEY
+  date                TEXT NOT NULL         -- calendar day, 'YYYY-MM-DD'
+  recipe_id           TEXT NOT NULL         -- -> recipes.id, ON DELETE CASCADE
+  servings            REAL                  -- planned servings; null = the recipe as written
+  position            INTEGER NOT NULL      -- order within the day
+  shopped             INTEGER NOT NULL DEFAULT 0   -- its ingredients have been bought
+  created_at          TEXT NOT NULL
+
+grocery_manual                              -- items typed in by hand (M8)
+  id                  TEXT PRIMARY KEY
+  name                TEXT NOT NULL
+  created_at          TEXT NOT NULL
+
+grocery_checks                              -- ticks on the grocery list (M8)
+  key                 TEXT PRIMARY KEY      -- item key, or 'manual:<id>'
+  sig                 TEXT NOT NULL         -- the amount shown when it was ticked
+  checked             INTEGER NOT NULL      -- unticking keeps the row: the later change wins
+  checked_at          TEXT NOT NULL
+
+pantry_staples                              -- things that are always in the house (M8)
+  key                 TEXT PRIMARY KEY      -- item key
+  name                TEXT NOT NULL
+  needed              INTEGER NOT NULL DEFAULT 0   -- put back on the list for this shop
+  created_at          TEXT NOT NULL
+
+grocery_terms                               -- shopping name and shop section per ingredient name (M9)
+  name_key            TEXT PRIMARY KEY      -- normalised ingredient name
+  canonical           TEXT NOT NULL         -- the name on the list, e.g. "onion"
+  aisle               TEXT NOT NULL
+  source              TEXT NOT NULL         -- 'llm' | 'manual' (manual is never overwritten)
+  created_at          TEXT NOT NULL
 ```
 
 Restoring an old version = inserting a new version that copies the old one's
@@ -235,10 +268,15 @@ with change note "Nutrition matching".
 - Manifest: name, icons (192 and 512 px), `display: standalone`, theme color.
 - Service worker caches the app shell.
 - On each online load, sync recipe list + current versions + thumbnails into
-  IndexedDB.
+  IndexedDB, and with them the meal plan from today on and what the grocery
+  list is built from (M9).
 - Offline: list, search and detail views (including scaling) work from
   IndexedDB; editing and import are disabled with an "Offline: read-only"
   banner.
+- The plan and the grocery list are part of the offline copy (M9). The one
+  exception to read-only: ticks on the grocery list. They are kept on the
+  device in an outbox and sent to the server when the connection is back;
+  for each item the latest tick wins, whichever device it was made on.
 - Cooking mode: large text, ingredient checklist, step-by-step, screen kept
   awake via the Wake Lock API.
 
@@ -247,6 +285,60 @@ with change note "Nutrition matching".
 - `GET /api/export/db`: SQLite snapshot via `VACUUM INTO` a temp file.
 - `POST /api/import`: restore from the JSON export (refuses if the database
   is not empty unless `?force=true`).
+- Export format version 2 adds the meal plan and what is kept of the grocery
+  list (manual items, staples and, from M9, shopping names; not the ticks of
+  a shop in progress); version 1 files (recipes, versions and foods only) can
+  still be restored.
+
+### 4.10 Meal plan
+- A week of days (Monday to Sunday). Each day holds any number of recipes;
+  there are no meal slots.
+- A plan entry is a recipe on a day with an optional servings count. Without
+  one, or when the recipe has no servings, it is planned as written.
+- Add from the week view (search and pick a recipe) or from a recipe page
+  (pick a day). Entries can be moved to another day, resized and removed.
+- The plan refers to the recipe, not to a version: it always shows the
+  current version.
+- "Today" is decided in the browser, never on the server (which runs in UTC):
+  weeks are addressed as `/plan?week=YYYY-MM-DD`.
+- Top-level navigation: a bottom tab bar with Recipes, Plan and Groceries.
+
+### 4.11 Grocery list
+The list is computed from the plan, not stored. Only what cannot be derived
+is saved: ticks, manual items, staples and the name/section cache.
+
+- Covers every plan entry from today on that is not yet `shopped`, with a
+  "through" filter (e.g. this week).
+- Each ingredient of a planned recipe is scaled by
+  `planned servings / recipe servings` (unrounded); amounts are rounded once,
+  on the sum, with the rounding rules of 4.4.
+- Ingredients merge when they have the same shopping name: the cached
+  `grocery_terms.canonical` for the ingredient name, else the normalised name.
+  Never merge by `food_id`: nutrition matches are nutritional equivalents
+  (spaghetti and penne are both "pasta, dry"), not the same product.
+- Amount shown: when all parts share a unit, the summed quantity and unit
+  (with the weight beside it unless the unit is a mass unit); otherwise the
+  total weight; parts without a weight are listed as written. Every item can
+  show which recipes and days it comes from.
+- Ticks carry the amount they were made for. When the amount changes later
+  (another recipe was planned), the tick no longer applies.
+- Staples are left off the list and shown in a collapsed section, from which
+  one can be put back for this shop.
+- Manual items are typed in and behave like any other item.
+- "Finish shopping": the covered plan entries become `shopped`, ticked manual
+  items are deleted, and what is left unticked becomes a manual item so it
+  carries over (except optional ingredients). Ticks are cleared and staples
+  go back to being left off. A plan entry can be put back on the list from
+  the week view.
+- Tidy (M9): for ingredient names not yet in `grocery_terms`, the LLM returns
+  a shopping name and a shop section from a fixed list. It merges only
+  spelling, plural and preparation variants, never different products, and it
+  never sees or returns amounts. It runs in the background and is cached per
+  name; until then the list works on the rules above. The user can change an
+  item's name or section; such a choice is never overwritten.
+- Pure functions in `src/lib/grocery.ts` with Vitest tests for scaling,
+  mixed units, missing weights, optional ingredients, staples, stale ticks
+  and carry-over.
 
 ---
 
@@ -307,6 +399,26 @@ Provide `.env.example` with all keys and no real values.
 
 **M6: Backup**
 - Export JSON, export DB, import JSON.
+
+**M7: Meal plan**
+- `plan_entries`, week view, add from the week and from a recipe, move,
+  servings, remove, bottom tab bar, backup format 2.
+- Done when: a recipe can be planned from its page and from the week view on
+  the phone, moved to another day, and the plan survives export and restore.
+
+**M8: Grocery list**
+- Computed list with merged, scaled amounts; ticks, manual items, staples,
+  finish shopping. Rules only, online only.
+- Done when: two planned recipes sharing an ingredient show one summed line
+  scaled to the planned servings, and finishing a shop empties the list
+  except for what was left unticked.
+
+**M9: Tidy + offline ticks**
+- LLM shopping names and sections with manual override; plan and grocery
+  list in the offline copy; ticks made offline sync on reconnect.
+- Done when: "onions" and "onion, diced" from two recipes are one line under
+  Produce, and ticks made in airplane mode are still there, and on the
+  server, after reconnecting.
 
 ---
 

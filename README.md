@@ -3,7 +3,8 @@
 Single-user recipe app (SvelteKit + SQLite). See [SPEC.md](SPEC.md) for the
 full spec and milestones.
 
-**Status:** Milestones 1 (CRUD, versions, photos, auth), 2 (LLM import), 3 (scaling), 4 (PWA, offline, cooking mode), 5 (nutrition) and 6 (backup) are
+**Status:** Milestones 1 (CRUD, versions, photos, auth), 2 (LLM import), 3 (scaling), 4 (PWA, offline, cooking mode), 5 (nutrition), 6 (backup),
+7 (meal plan), 8 (grocery list) and 9 (shop sections, offline ticks) are
 implemented: every milestone of the spec.
 
 Adding and changing recipes happens mainly through the **assistant chat**:
@@ -20,7 +21,7 @@ Scaling only changes what is displayed unless you press "Save as new version".
 The app is an installable **PWA**. Every page opened while online refreshes a
 copy of all recipes (current versions and thumbnails) on the device; without a
 connection the app opens that copy read-only at `/offline`, with search and
-scaling. Logging out removes the copy. "Start cooking" on a recipe opens
+scaling, the meal plan and the grocery list. Logging out removes the copy. "Start cooking" on a recipe opens
 **cooking mode**: large text, an ingredient checklist, one step at a time, and
 the screen kept awake where the browser supports it.
 
@@ -33,8 +34,22 @@ ones nothing was found for. Ingredient names matched before are reused without
 any lookup, and every match can be changed by hand (search, type in the values
 from a label, or "No match").
 
+The **meal plan** is a week of days: put a recipe on a day from the week view
+or from the recipe ("Add to plan"), with the servings to cook. The **grocery
+list** is computed from the plan, never stored: every ingredient of every
+planned recipe from today on, scaled to the planned servings and merged by
+name, with the recipes and days each amount comes from. Items typed in by
+hand sit on the same list; staples ("I always have this") are left off until
+they are needed. "Finish shopping" marks the planned recipes as shopped for,
+drops what was ticked and keeps what was not. In the background the LLM gives
+each new ingredient name a shopping name and a shop section, so "onions" and
+"onion, diced" become one line under Fruit & vegetables; it never sees
+amounts, and a name or section can be changed by hand. Ticking works without
+a connection: ticks are kept on the device and sent when it is back.
+
 **Backup** lives on the settings page: download everything as JSON
-(`GET /api/export`: all recipes, versions and foods) or as the SQLite file
+(`GET /api/export`: all recipes, versions and foods, the meal plan and the
+grocery list's manual items, staples and shopping names) or as the SQLite file
 (`GET /api/export/db`), and restore a JSON backup (`POST /api/import`). A
 restore into a database that already has data is refused unless you confirm
 replacing everything (`?force=true`). Photos are files on the volume and are
@@ -93,4 +108,7 @@ npm run dev              # migrations run automatically on start
 - `src/lib/nutrition.ts`, `src/lib/food-sources.ts` — nutrition math and
   parsing of the food databases' answers (pure, tested);
   `src/lib/server/nutrition.ts` does the matching
+- `src/lib/dates.ts`, `src/lib/grocery.ts` — calendar days and the grocery
+  list built from the plan (pure, tested); `src/lib/server/plan.ts` and
+  `src/lib/server/grocery.ts` hold the data access and the background naming
 - `src/routes/api/` — JSON API (validated with Zod); pages under `src/routes/`

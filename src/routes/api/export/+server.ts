@@ -1,7 +1,7 @@
 import { exportAll } from '$lib/server/backup';
 import type { RequestHandler } from './$types';
 
-/** JSON backup: all recipes, all versions and all foods. */
+/** JSON backup: all recipes, all versions, all foods, the meal plan and the grocery list's manual items and staples. */
 export const GET: RequestHandler = () => {
 	const data = exportAll();
 	return new Response(JSON.stringify(data, null, '\t'), {

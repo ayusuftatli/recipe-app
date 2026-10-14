@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { isDay } from './dates';
+import { AISLES } from './grocery';
 
 /** Single source of truth for recipe shapes (API, UI and, later, LLM output). */
 
@@ -91,3 +93,62 @@ export const SetFoodRequest = z.object({
 		.nullable()
 });
 export type SetFoodRequest = z.infer<typeof SetFoodRequest>;
+
+/** A calendar day, 'YYYY-MM-DD'. */
+export const Day = z.string().refine(isDay, 'Expected a date as YYYY-MM-DD');
+
+const PlannedServings = z.number().positive().max(1000).nullable();
+
+/** Body of POST /api/plan: puts a recipe on a day. Without `servings`, the recipe as written. */
+export const AddPlanEntryRequest = z.object({
+	date: Day,
+	recipe_id: z.string().min(1),
+	servings: PlannedServings.optional()
+});
+export type AddPlanEntryRequest = z.infer<typeof AddPlanEntryRequest>;
+
+/**
+ * Body of PATCH /api/plan/[id]: moves an entry to another day, changes how much
+ * is cooked, or says whether its ingredients have been bought.
+ */
+export const PatchPlanEntryRequest = z
+	.object({ date: Day.optional(), servings: PlannedServings.optional(), shopped: z.boolean().optional() })
+	.refine((p) => p.date !== undefined || p.servings !== undefined || p.shopped !== undefined, 'Nothing to change');
+export type PatchPlanEntryRequest = z.infer<typeof PatchPlanEntryRequest>;
+
+const ItemKey = z.string().min(1).max(300);
+const ItemName = z.string().trim().min(1).max(200);
+
+/** Body of POST /api/grocery/checks: ticks made or taken back, each with when it happened. */
+export const GroceryChecksRequest = z.object({
+	changes: z
+		.array(z.object({ key: ItemKey, sig: z.string().max(300), checked: z.boolean(), at: z.string().datetime() }))
+		.min(1)
+		.max(500)
+});
+export type GroceryChecksRequest = z.infer<typeof GroceryChecksRequest>;
+
+/** Body of POST /api/grocery/manual: an item typed in by hand. */
+export const AddManualItemRequest = z.object({ name: ItemName });
+
+/**
+ * Body of POST /api/grocery/staples: 'staple' leaves the item off the list,
+ * 'needed' puts a staple back for this shop, 'none' makes it an ordinary item again.
+ */
+export const SetStapleRequest = z.object({ key: ItemKey, name: ItemName, state: z.enum(['staple', 'needed', 'none']) });
+export type SetStapleRequest = z.infer<typeof SetStapleRequest>;
+
+/** Body of POST /api/grocery/finish: the days the list on screen covers. */
+export const FinishShoppingRequest = z.object({ from: Day, through: Day.nullable().optional() });
+export type FinishShoppingRequest = z.infer<typeof FinishShoppingRequest>;
+
+/**
+ * Body of PUT /api/grocery/terms: the user's own name and shop section for an
+ * item, applied to every ingredient name behind it.
+ */
+export const SetGroceryTermRequest = z.object({
+	names: z.array(z.string().trim().min(1).max(300)).min(1).max(50),
+	canonical: z.string().trim().min(1).max(80),
+	aisle: z.enum(AISLES)
+});
+export type SetGroceryTermRequest = z.infer<typeof SetGroceryTermRequest>;

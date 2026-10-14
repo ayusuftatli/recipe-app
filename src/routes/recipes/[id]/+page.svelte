@@ -3,6 +3,7 @@
 	import { invalidateAll } from '$app/navigation';
 	import Icon from '$lib/components/Icon.svelte';
 	import NutritionPanel from '$lib/components/NutritionPanel.svelte';
+	import PlanDaySheet from '$lib/components/PlanDaySheet.svelte';
 	import RecipeView from '$lib/components/RecipeView.svelte';
 	import { photoUrl } from '$lib/format';
 	import type { RecipeDraft } from '$lib/schema';
@@ -14,6 +15,9 @@
 	const amountsKey = $derived(
 		JSON.stringify([recipe.current.servings, recipe.current.yield_g, recipe.current.ingredients.map((i) => [i.id, i.qty, i.unit, i.grams])])
 	);
+
+	/** Open while a day is being picked; holds the servings to plan (null: as written). */
+	let planning = $state<{ servings: number | null } | null>(null);
 
 	async function saveScaled(draft: RecipeDraft, changeNote: string) {
 		const res = await fetch(`/api/recipes/${recipe.id}`, {
@@ -47,8 +51,23 @@
 </div>
 
 {#key amountsKey}
-	<RecipeView version={recipe.current} scalable pinCook onSaveScaled={saveScaled} />
+	<RecipeView
+		version={recipe.current}
+		scalable
+		pinCook
+		onSaveScaled={saveScaled}
+		onPlan={recipe.archived ? undefined : (servings) => (planning = { servings })}
+	/>
 {/key}
+{#if planning}
+	<PlanDaySheet
+		recipeId={recipe.id}
+		title={recipe.current.title}
+		servings={planning.servings}
+		recipeServings={recipe.current.servings}
+		onClose={() => (planning = null)}
+	/>
+{/if}
 <NutritionPanel recipeId={recipe.id} version={recipe.current} foods={data.foods} matching={data.matching} onChanged={invalidateAll} />
 
 <form method="POST" action={recipe.archived ? '?/unarchive' : '?/archive'} use:enhance class="archive-form">

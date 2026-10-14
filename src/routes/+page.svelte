@@ -130,11 +130,11 @@
 	.empty .btn {
 		margin-top: 8px;
 	}
-	/* Floats over the list within thumb reach, in line with the page column. */
+	/* Floats over the list within thumb reach, above the tab bar and in line with the page column. */
 	.fab {
 		position: fixed;
 		right: max(16px, calc(50% - 364px));
-		bottom: calc(20px + env(safe-area-inset-bottom));
+		bottom: calc(16px + var(--tabbar, 0px) + env(safe-area-inset-bottom));
 		z-index: 10;
 		display: inline-flex;
 		align-items: center;

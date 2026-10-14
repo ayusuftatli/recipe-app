@@ -1,3 +1,4 @@
+import type { GroceryData } from './grocery';
 import type { Ingredient, Nutrients, RecipeDraft, Step } from './schema';
 
 export interface RecipeVersion {
@@ -106,4 +107,27 @@ export interface Food {
 /** Response of GET and POST /api/recipes/[id]/nutrition: is background matching running for this recipe? */
 export interface MatchStatus {
 	running: boolean;
+}
+
+/** A recipe on a day of the meal plan, with what the plan shows of the recipe's current version. */
+export interface PlanEntry {
+	id: string;
+	/** 'YYYY-MM-DD' */
+	date: string;
+	recipe_id: string;
+	/** null: the recipe as written. */
+	servings: number | null;
+	position: number;
+	shopped: boolean;
+	title: string;
+	/** What the recipe itself makes; null when it has no servings count, so it cannot be resized. */
+	recipe_servings: number | null;
+	photo_path: string | null;
+}
+
+/** Response of GET /api/sync: what the device keeps for offline use. */
+export interface OfflineSync {
+	recipes: RecipeDetail[];
+	plan: PlanEntry[];
+	grocery: GroceryData;
 }

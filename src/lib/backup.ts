@@ -1,14 +1,17 @@
 import { z } from 'zod';
-import { Ingredient, Nutrients, Step, Tags } from './schema';
+import { Day, Ingredient, Nutrients, Step, Tags } from './schema';
 
 /**
- * The JSON backup (spec 4.9): every recipe, every version and every food,
+ * The JSON backup (spec 4.9): every recipe, every version, every food, the
+ * meal plan and what is kept of the grocery list (manual items, staples and shopping names),
  * with ids and timestamps exactly as stored, so a restore is a faithful copy.
- * Photos are files and are not part of it.
+ * Photos are files and are not part of it; ticks on the grocery list belong
+ * to a shop in progress and are not either.
  */
 
 export const EXPORT_FORMAT = 'recipe-box-export';
-export const EXPORT_VERSION = 1;
+/** 2 added the meal plan and the grocery list. Files of version 1 are still read; they simply have neither. */
+export const EXPORT_VERSION = 2;
 
 const Id = z.string().min(1);
 const Timestamp = z.string().min(1);
@@ -47,13 +50,40 @@ export const ExportedFood = z.object({
 	created_at: Timestamp
 });
 
+export const ExportedPlanEntry = z.object({
+	id: Id,
+	date: Day,
+	recipe_id: Id,
+	servings: z.number().nullable(),
+	position: z.number().int(),
+	shopped: z.boolean(),
+	created_at: Timestamp
+});
+
+export const ExportedManualItem = z.object({ id: Id, name: z.string().min(1), created_at: Timestamp });
+
+export const ExportedStaple = z.object({ key: Id, name: z.string().min(1), needed: z.boolean(), created_at: Timestamp });
+
+export const ExportedTerm = z.object({
+	name_key: Id,
+	canonical: z.string().min(1),
+	// Not checked against today's sections: an unknown one is shown under Other.
+	aisle: z.string().min(1),
+	source: z.enum(['llm', 'manual']),
+	created_at: Timestamp
+});
+
 export const ExportFile = z.object({
 	format: z.literal(EXPORT_FORMAT),
-	version: z.literal(EXPORT_VERSION),
+	version: z.union([z.literal(1), z.literal(EXPORT_VERSION)]),
 	exported_at: Timestamp,
 	recipes: z.array(ExportedRecipe),
 	versions: z.array(ExportedVersion),
-	foods: z.array(ExportedFood)
+	foods: z.array(ExportedFood),
+	plan: z.array(ExportedPlanEntry).default([]),
+	grocery_manual: z.array(ExportedManualItem).default([]),
+	staples: z.array(ExportedStaple).default([]),
+	grocery_terms: z.array(ExportedTerm).default([])
 });
 export type ExportFile = z.infer<typeof ExportFile>;
 
@@ -73,6 +103,10 @@ export function checkExport(data: ExportFile): string[] {
 	duplicates('recipe id', data.recipes.map((r) => r.id));
 	duplicates('version id', data.versions.map((v) => v.id));
 	duplicates('food id', data.foods.map((f) => f.id));
+	duplicates('plan entry id', data.plan.map((e) => e.id));
+	duplicates('grocery item id', data.grocery_manual.map((m) => m.id));
+	duplicates('staple', data.staples.map((s) => s.key));
+	duplicates('shopping name', data.grocery_terms.map((t) => t.name_key));
 	duplicates('version number', data.versions.map((v) => `${v.recipe_id} v${v.version_number}`));
 	duplicates('food source id', data.foods.flatMap((f) => (f.source_id === null ? [] : [`${f.source} ${f.source_id}`])));
 
@@ -85,6 +119,9 @@ export function checkExport(data: ExportFile): string[] {
 		const owner = versionRecipe.get(r.current_version_id);
 		if (owner === undefined) problems.push(`Recipe ${r.id} points at a current version that is not in the file`);
 		else if (owner !== r.id) problems.push(`Recipe ${r.id} points at a version of another recipe`);
+	}
+	for (const e of data.plan) {
+		if (!recipeIds.has(e.recipe_id)) problems.push(`Plan entry ${e.id} is for a recipe that is not in the file`);
 	}
 	return problems.slice(0, 20);
 }
